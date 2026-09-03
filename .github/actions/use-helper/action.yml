@@ -1,7 +1,7 @@
 name: Use bom-helper
 description: >
   Resolve helper.repository / helper.ref from deploy_targets.yml (or inputs),
-  check out bom-helper, and symlink scripts/ + Dockerfile into the *-bom workspace.
+  check out bom-helper, and copy scripts/ + Dockerfile into the *-bom workspace.
 inputs:
   repository:
     description: Helper git repository (org/name). Empty reads deploy_targets.yml.
@@ -59,7 +59,7 @@ runs:
         path: ${{ inputs.path }}
         token: ${{ inputs.token }}
 
-    - name: Link scripts and Dockerfile
+    - name: Materialize scripts and Dockerfile
       shell: bash
       run: |
         set -euo pipefail
@@ -72,14 +72,13 @@ runs:
           echo "bom-helper checkout missing Dockerfile at ${HELPER}" >&2
           exit 1
         fi
-        # Remove leftover in-repo copies from older *-bom layouts.
-        if [[ -e scripts && ! -L scripts ]]; then
-          rm -rf scripts
-        fi
-        if [[ -e Dockerfile && ! -L Dockerfile ]]; then
-          rm -f Dockerfile
-        fi
-        ln -sfn "${HELPER}/scripts" scripts
-        ln -sfn "${HELPER}/Dockerfile" Dockerfile
+        # Copy (do not symlink): Docker BuildKit does not reliably COPY through
+        # directory symlinks, which breaks `docker build -f Dockerfile .`.
+        rm -rf scripts
+        mkdir -p scripts
+        cp -a "${HELPER}/scripts/." scripts/
+        cp "${HELPER}/Dockerfile" Dockerfile
         chmod +x scripts/deploy_amplify_console.sh
+        test -f scripts/stage_extension_blueprints.py
+        test -f scripts/install_backend_packages.py
         echo "Using bom-helper ${{ steps.pin.outputs.repository }}@${{ steps.pin.outputs.ref }}"

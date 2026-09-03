@@ -25,18 +25,26 @@ helper:
   ref: main          # pin a tag (e.g. v0.1.0) once you cut releases
 ```
 
-Each deploy workflow checks out the tenant BOM, then:
+Each tenant `*-bom` vendors a thin local action
+(`.github/actions/setup-bom-helper`) that **checkouts** this repo (private
+repos cannot be loaded with `uses: renglo/bom-helper/...` — GitHub reports
+“repository not found”).
 
 ```yaml
-- uses: renglo/bom-helper/.github/actions/use-helper@main
+- uses: actions/checkout@v4
+- uses: ./.github/actions/setup-bom-helper
 ```
 
-The action reads `helper.*`, clones this repo into `.bom-helper/`, and symlinks
-`scripts/` + `Dockerfile` into the workspace so existing `python scripts/…`
-and `docker build -f Dockerfile .` paths keep working.
+That action reads `helper.*`, clones this repo into `.bom-helper/`, and
+**copies** `scripts/` + `Dockerfile` into the workspace (not symlinks — Docker
+BuildKit cannot reliably `COPY` through directory symlinks).
 
-Bump `helper.ref` (and push the `*-bom`) to pick up script changes. Editing this
-repo alone does not redeploy tenants.
+If the clone step fails on a private org repo, grant the `*-bom` workflow
+access to `bom-helper` (org **Actions** settings → access to repositories),
+or pass a PAT via `token: ${{ secrets.BOM_HELPER_TOKEN }}`.
+
+Bump `helper.ref` (and push the `*-bom`) to pick up script changes. Editing
+this repo alone does not redeploy tenants.
 
 ## Local use
 
