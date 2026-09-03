@@ -1,0 +1,85 @@
+name: Use bom-helper
+description: >
+  Resolve helper.repository / helper.ref from deploy_targets.yml (or inputs),
+  check out bom-helper, and symlink scripts/ + Dockerfile into the *-bom workspace.
+inputs:
+  repository:
+    description: Helper git repository (org/name). Empty reads deploy_targets.yml.
+    required: false
+    default: ""
+  ref:
+    description: Helper git ref. Empty reads deploy_targets.yml (default main).
+    required: false
+    default: ""
+  path:
+    description: Checkout path for the helper clone
+    required: false
+    default: ".bom-helper"
+  token:
+    description: Token used to clone the helper repository
+    required: false
+    default: ${{ github.token }}
+runs:
+  using: composite
+  steps:
+    - name: Resolve helper pin
+      id: pin
+      shell: bash
+      run: |
+        set -euo pipefail
+        REPO="${{ inputs.repository }}"
+        REF="${{ inputs.ref }}"
+        if [[ -z "${REPO}" || -z "${REF}" ]]; then
+          if [[ ! -f deploy_targets.yml ]]; then
+            echo "deploy_targets.yml not found; pass repository and ref inputs." >&2
+            exit 1
+          fi
+          python3 -m pip install --quiet pyyaml
+          mapfile -t VALUES < <(python3 - <<'PY'
+        import yaml
+        data = yaml.safe_load(open("deploy_targets.yml")) or {}
+        helper = data.get("helper") or {}
+        print(helper.get("repository") or "renglo/bom-helper")
+        print(helper.get("ref") or "main")
+        PY
+          )
+          if [[ -z "${REPO}" ]]; then REPO="${VALUES[0]}"; fi
+          if [[ -z "${REF}" ]]; then REF="${VALUES[1]}"; fi
+        fi
+        {
+          echo "repository=${REPO}"
+          echo "ref=${REF}"
+        } >> "${GITHUB_OUTPUT}"
+
+    - name: Checkout bom-helper
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ steps.pin.outputs.repository }}
+        ref: ${{ steps.pin.outputs.ref }}
+        path: ${{ inputs.path }}
+        token: ${{ inputs.token }}
+
+    - name: Link scripts and Dockerfile
+      shell: bash
+      run: |
+        set -euo pipefail
+        HELPER="${{ inputs.path }}"
+        if [[ ! -d "${HELPER}/scripts" ]]; then
+          echo "bom-helper checkout missing scripts/ at ${HELPER}" >&2
+          exit 1
+        fi
+        if [[ ! -f "${HELPER}/Dockerfile" ]]; then
+          echo "bom-helper checkout missing Dockerfile at ${HELPER}" >&2
+          exit 1
+        fi
+        # Remove leftover in-repo copies from older *-bom layouts.
+        if [[ -e scripts && ! -L scripts ]]; then
+          rm -rf scripts
+        fi
+        if [[ -e Dockerfile && ! -L Dockerfile ]]; then
+          rm -f Dockerfile
+        fi
+        ln -sfn "${HELPER}/scripts" scripts
+        ln -sfn "${HELPER}/Dockerfile" Dockerfile
+        chmod +x scripts/deploy_amplify_console.sh
+        echo "Using bom-helper ${{ steps.pin.outputs.repository }}@${{ steps.pin.outputs.ref }}"
