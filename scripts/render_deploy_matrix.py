@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -34,18 +35,19 @@ import yaml
 VALID_STAGES = ("staging", "production")
 VALID_HANDLERS_COMPUTE = ("ecs", "lambda_only")
 DEFAULT_HANDLERS_COMPUTE = "ecs"
-DEFAULT_AWS_REGION = "us-east-1"
 OIDC_ROLE_TEMPLATE = "arn:aws:iam::{account}:role/GitHubActionsDeployRole-{id}-{stage}"
 OIDC_HANDLERS_ROLE_TEMPLATE = (
     "arn:aws:iam::{account}:role/GitHubActionsHandlersRole-{id}-{stage}"
 )
 PLATFORM_VARS_SSM_TEMPLATE = "/{id}/bootstrap/platform-vars/{stage}"
 DEPLOY_INPUT_SSM_TEMPLATE = "/{id}/bootstrap/deploy-input"
-DEFAULT_REGISTRY = {
-    "domain": "renglo",
-    "python_repository": "python-store",
-    "npm_repository": "npm-store",
-}
+
+from registry_targets import (  # noqa: E402
+    DEFAULT_AWS_REGION,
+    DEFAULT_REGISTRY,
+    resolve_registries,
+    resolve_registry,
+)
 
 
 def _latest_bom(bom_dir: Path) -> str:
@@ -75,53 +77,6 @@ def resolve_handlers_bom(data: dict, handlers_dir: Path) -> str:
     if root:
         return root
     return _latest_bom(handlers_dir)
-
-
-def resolve_registry(data: dict) -> dict[str, str]:
-    """Publisher CodeArtifact connection for pip/npm login.
-
-    ``registry.domain_owner`` and ``registry.region`` default to the first
-    tenant account/region when omitted (same-account publisher + tenant).
-    """
-    raw = data.get("registry") or {}
-    if not isinstance(raw, dict):
-        raise RuntimeError("deploy_targets.yml: registry must be a mapping")
-
-    domain = str(raw.get("domain") or DEFAULT_REGISTRY["domain"]).strip() or DEFAULT_REGISTRY["domain"]
-    python_repository = (
-        str(raw.get("python_repository") or DEFAULT_REGISTRY["python_repository"]).strip()
-        or DEFAULT_REGISTRY["python_repository"]
-    )
-    npm_repository = (
-        str(raw.get("npm_repository") or DEFAULT_REGISTRY["npm_repository"]).strip()
-        or DEFAULT_REGISTRY["npm_repository"]
-    )
-    owner = str(raw.get("domain_owner") or "").strip()
-    region = str(raw.get("region") or "").strip()
-
-    tenants = data.get("tenants") or {}
-    if isinstance(tenants, dict):
-        for tenant_cfg in tenants.values():
-            if not isinstance(tenant_cfg, dict):
-                continue
-            if not owner:
-                owner = str(tenant_cfg.get("aws_account") or "").strip()
-            if not region:
-                region = str(tenant_cfg.get("aws_region") or "").strip()
-            if owner and region:
-                break
-
-    if not owner:
-        raise RuntimeError(
-            "deploy_targets.yml: set registry.domain_owner or tenants.*.aws_account"
-        )
-    return {
-        "domain": domain,
-        "domain_owner": owner,
-        "python_repository": python_repository,
-        "npm_repository": npm_repository,
-        "region": region or DEFAULT_AWS_REGION,
-    }
 
 
 def resolve_handlers_compute(data: dict) -> str:
@@ -282,7 +237,8 @@ def main() -> int:
     parser.add_argument("--stage", choices=VALID_STAGES, default="", help="Optional stage filter (backend/console)")
     parser.add_argument("--build-bom", action="store_true", help="Print backend BOM version only")
     parser.add_argument("--handlers-bom", action="store_true", help="Print handlers BOM version only")
-    parser.add_argument("--registry", action="store_true", help="Print CodeArtifact registry JSON")
+    parser.add_argument("--registry", action="store_true", help="Print first CodeArtifact registry JSON")
+    parser.add_argument("--registries", action="store_true", help="Print all CodeArtifact registry JSON")
     parser.add_argument("--filter-json", default="", help="Intersect with filter JSON (include list)")
     args = parser.parse_args()
 
@@ -300,8 +256,18 @@ def main() -> int:
     if args.handlers_bom:
         print(resolve_handlers_bom(data, repo_root / "handlers_bom"))
         return 0
-    if args.registry:
-        print(json.dumps(resolve_registry(data), separators=(",", ":")))
+    if args.registries or args.registry:
+        domain_override = os.environ.get("CODEARTIFACT_DOMAIN", "").strip()
+        owner_override = os.environ.get("CODEARTIFACT_DOMAIN_OWNER", "").strip()
+        registries = resolve_registries(
+            data,
+            domain_override=domain_override,
+            owner_override=owner_override,
+        )
+        if args.registries:
+            print(json.dumps(registries, separators=(",", ":")))
+        else:
+            print(json.dumps(registries[0], separators=(",", ":")))
         return 0
 
     if args.pipeline == "handlers":

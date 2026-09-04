@@ -23,6 +23,12 @@ In `deploy_targets.yml`:
 helper:
   repository: renglo/bom-helper
   ref: main          # pin a tag (e.g. v0.1.0) once you cut releases
+
+# Optional: foreign CodeArtifact publishers (omit for same-account only)
+# registries:
+#   - domain: contoso
+#     domain_owner: "111122223333"
+#     npm_scopes: ["@contoso"]
 ```
 
 Each tenant `*-bom` vendors a thin local action
