@@ -6,6 +6,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -15,7 +16,7 @@ from registry_targets import (  # noqa: E402
     resolve_registries,
     resolve_registry,
 )
-from configure_codeartifact import pip_extra_index_url  # noqa: E402
+from configure_codeartifact import configure_npm, pip_extra_index_url  # noqa: E402
 
 
 def _base(**overrides):
@@ -132,6 +133,29 @@ class ConfigureCodeartifactHelpersTests(unittest.TestCase):
         self.assertTrue(url.startswith("https://aws:"))
         self.assertIn("@domain-111.d.codeartifact.us-east-1.amazonaws.com/pypi/python-store/simple/", url)
         self.assertIn("tok%2Fen%2Bvalue", url)
+
+    def test_configure_npm_does_not_set_always_auth(self) -> None:
+        registries = [
+            {
+                "domain": "arbitium",
+                "domain_owner": "111122223333",
+                "npm_repository": "npm-store",
+                "region": "us-east-1",
+                "npm_scopes": ["@arbitium"],
+            }
+        ]
+        endpoint = "https://arbitium-111.d.codeartifact.us-east-1.amazonaws.com/npm/npm-store/"
+        with (
+            patch("configure_codeartifact._login"),
+            patch("configure_codeartifact._repository_endpoint", return_value=endpoint),
+            patch("configure_codeartifact._auth_token", return_value="tok"),
+            patch("configure_codeartifact._run") as run,
+        ):
+            configure_npm(registries)
+        keys = [call.args[0][3] for call in run.call_args_list]
+        self.assertTrue(any(key == "@arbitium:registry" for key in keys))
+        self.assertTrue(any(key.endswith(":_authToken") for key in keys))
+        self.assertFalse(any("always-auth" in key for key in keys))
 
 
 if __name__ == "__main__":
