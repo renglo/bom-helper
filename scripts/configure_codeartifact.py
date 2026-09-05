@@ -138,7 +138,7 @@ def configure_npm(registries: list[dict[str, Any]]) -> None:
                 scope_name = f"@{scope_name}"
             _run(["npm", "config", "set", f"{scope_name}:registry", endpoint])
             _run(["npm", "config", "set", f"{host_path}:_authToken", token])
-            _run(["npm", "config", "set", f"{host_path}:always-auth", "true"])
+            # npm 11+ (Node 24) removed always-auth; a registry _authToken is enough.
 
 
 def _load_registries(raw: str | None, path: str | None) -> list[dict[str, Any]]:
