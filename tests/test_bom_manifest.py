@@ -20,6 +20,7 @@ from bom_manifest import (  # noqa: E402
     local_npm_install_paths,
     npm_extension_handles,
     npm_install_specs,
+    npm_wl_package,
     package_pins,
     pipeline_has_work,
     python_install_specs,
@@ -135,37 +136,50 @@ class BomManifestV2Tests(unittest.TestCase):
         self.assertEqual(npm_install_specs(data), ["@renglo/data@1.0.0"])
         self.assertEqual(package_pins(data, "npm"), {"@renglo/data": "1.0.0"})
 
-    def test_wl_repo_is_console_only_at_stanley_wl_path(self) -> None:
+    def test_wl_repo_is_console_only_at_repo_shortname(self) -> None:
         path = _write(
             Path(self._tmp("wl.json")),
             {
                 "version": "v0.1.4",
                 "repos": {
                     "renglo/console": {"commit": "aaa"},
-                    "renglo/stanley-wl": {"branch": "main"},
+                    "acme/acme-wl": {"branch": "main"},
                 },
             },
         )
         data = load_bom(path)
         specs = resolve_specs(path, data)
-        wl = next(s for s in specs if s.key == "renglo/stanley-wl")
-        self.assertEqual(wl.path, "stanley-wl")
+        wl = next(s for s in specs if s.key == "acme/acme-wl")
+        self.assertEqual(wl.path, "acme-wl")
         self.assertEqual(wl.pipelines, frozenset({"console"}))
         self.assertEqual(
             [s.key for s in checkout_specs(specs, "console", data)],
-            ["renglo/console", "renglo/stanley-wl"],
+            ["renglo/console", "acme/acme-wl"],
         )
         self.assertEqual(checkout_specs(specs, "backend", data), [])
 
-    def test_stanley_wl_npm_pin_skips_clone(self) -> None:
+    def test_wl_repo_named_wl_checks_out_to_wl(self) -> None:
+        path = _write(
+            Path(self._tmp("wl-short.json")),
+            {
+                "version": "v0.1.4",
+                "repos": {"acme/wl": {"branch": "main"}},
+            },
+        )
+        data = load_bom(path)
+        specs = resolve_specs(path, data)
+        self.assertEqual(specs[0].path, "wl")
+        self.assertEqual(specs[0].pipelines, frozenset({"console"}))
+
+    def test_wl_npm_pin_skips_matching_clone(self) -> None:
         path = _write(
             Path(self._tmp("wl-pin.json")),
             {
                 "version": "v0.1.4",
-                "npm": {"@stanley/wl": "0.0.1"},
+                "npm": {"@acme/wl": "0.0.1"},
                 "repos": {
                     "renglo/console": {"commit": "aaa"},
-                    "renglo/stanley-wl": {"branch": "main"},
+                    "acme/acme-wl": {"branch": "main"},
                 },
             },
         )
@@ -175,6 +189,7 @@ class BomManifestV2Tests(unittest.TestCase):
             [s.key for s in checkout_specs(specs, "console", data)],
             ["renglo/console"],
         )
+        self.assertEqual(npm_wl_package(data), "@acme/wl")
 
     def test_console_host_pin_is_excluded_from_ci_npm_specs(self) -> None:
         path = _write(
@@ -183,7 +198,7 @@ class BomManifestV2Tests(unittest.TestCase):
                 "version": "v0.1.8",
                 "npm": {
                     "@renglo/console": "0.0.3",
-                    "@stanley/wl": "0.0.1",
+                    "@acme/wl": "0.0.1",
                     "@renglo/data": "0.0.2",
                 },
             },
@@ -192,16 +207,17 @@ class BomManifestV2Tests(unittest.TestCase):
         self.assertEqual(console_host_spec(data), "@renglo/console@0.0.3")
         self.assertEqual(
             console_dependency_specs(data),
-            ["@stanley/wl@0.0.1", "@renglo/data@0.0.2"],
+            ["@acme/wl@0.0.1", "@renglo/data@0.0.2"],
         )
         self.assertEqual(
             npm_install_specs(data),
-            ["@renglo/console@0.0.3", "@stanley/wl@0.0.1", "@renglo/data@0.0.2"],
+            ["@renglo/console@0.0.3", "@acme/wl@0.0.1", "@renglo/data@0.0.2"],
         )
         outputs = ci_outputs(data, [])
         self.assertEqual(outputs["console_host_spec"], "@renglo/console@0.0.3")
         self.assertEqual(outputs["has_console_pin"], "true")
-        self.assertEqual(outputs["npm_specs"], "@stanley/wl@0.0.1 @renglo/data@0.0.2")
+        self.assertEqual(outputs["npm_specs"], "@acme/wl@0.0.1 @renglo/data@0.0.2")
+        self.assertEqual(outputs["vite_wl_package"], "@acme/wl")
         self.assertEqual(outputs["has_npm_pins"], "true")
 
     def test_npm_extension_handles_ignore_scope_and_skip_host_and_wl(self) -> None:
@@ -239,8 +255,8 @@ class BomManifestV2Tests(unittest.TestCase):
         dest = Path(self._tmp("dest"))
         (dest / "console").mkdir(parents=True)
         (dest / "console" / "package.json").write_text("{}", encoding="utf-8")
-        (dest / "stanley-wl").mkdir(parents=True)
-        (dest / "stanley-wl" / "package.json").write_text("{}", encoding="utf-8")
+        (dest / "acme-wl").mkdir(parents=True)
+        (dest / "acme-wl" / "package.json").write_text("{}", encoding="utf-8")
         (dest / "extensions" / "data").mkdir(parents=True)
         (dest / "extensions" / "data" / "package.json").write_text("{}", encoding="utf-8")
         path = _write(
@@ -249,7 +265,7 @@ class BomManifestV2Tests(unittest.TestCase):
                 "version": "v0.1.4",
                 "repos": {
                     "renglo/console": {"commit": "aaa"},
-                    "renglo/stanley-wl": {"branch": "main"},
+                    "acme/acme-wl": {"branch": "main"},
                     "renglo/data": {"commit": "bbb"},
                 },
             },
@@ -258,7 +274,7 @@ class BomManifestV2Tests(unittest.TestCase):
         specs = resolve_specs(path, data)
         console = checkout_specs(specs, "console", data)
         found = local_npm_install_paths(dest, console)
-        self.assertEqual(found, [str((dest / "stanley-wl").resolve())])
+        self.assertEqual(found, [str((dest / "acme-wl").resolve())])
 
     def _tmp(self, name: str) -> str:
         folder = Path(self.id().replace(".", "_"))
