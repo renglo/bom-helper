@@ -1,6 +1,6 @@
 # bom-helper
 
-Shared deploy runtime for every tenant `*-bom` repository (stanley-bom, apollo-bom, …).
+Shared deploy runtime for every tenant `*-bom` repository (example-bom, apollo-bom, …).
 
 Tenant BOM repos keep **pins only** (`bom/`, `handlers_bom/`, `deploy_targets.yml`).
 This repo owns the scripts, Dockerfile, and the GitHub Action that wires them into CI.
@@ -54,10 +54,10 @@ this repo alone does not redeploy tenants.
 
 ## Local use
 
-From a Stanley-style workspace where this checkout sits next to the tenant BOM:
+From a workspace where this checkout sits next to the tenant BOM:
 
 ```bash
-cd ops/stanley-bom
+cd ops/example-bom
 python3 ../bom-helper/scripts/bom_manifest.py --plan --pipeline backend bom/v0.1.10.json
 ```
 

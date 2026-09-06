@@ -14,7 +14,7 @@ Layout and pipeline membership come from conventions (overrideable per repo):
   renglo/renglo-lib            -> dev/renglo-lib            (backend, handlers)
   renglo/console               -> console                   (console)
   renglo/extensions-service    -> dev/extensions-service    (handlers)
-  org/wl | stanley-wl          -> stanley-wl                (console)
+  org/wl | org/<tenant>-wl     -> <repo shortname>          (console)
   any other org/name           -> extensions/<name>
 
 Unknown repos in bom/*.json default to backend+console.
@@ -46,13 +46,6 @@ CORE_REPOS: dict[str, tuple[str, frozenset[str]]] = {
     "renglo/extensions-service": ("dev/extensions-service", frozenset({"handlers"})),
 }
 
-PATH_ALIASES: dict[str, str] = {
-    "Arbitium/arbitiumlab": "extensions/arbitium",
-}
-
-# Tenant white-label npm package (@stanley/wl). Cloned so CI can npm install it.
-WL_REPO_NAMES = frozenset({"wl", "stanley-wl"})
-
 # Console host app. A pin unpacks this tarball to console/; it is not npm-installed
 # into that same tree.
 CONSOLE_NPM_PACKAGE = "@renglo/console"
@@ -82,6 +75,11 @@ class RepoSpec:
         return self.path.startswith("extensions/")
 
 
+def is_wl_repo_name(name: str) -> bool:
+    """Git repo shortname for a tenant white-label pack."""
+    return name == "wl" or name.endswith("-wl")
+
+
 def pick_ref(repo_entry: dict[str, Any] | None) -> str:
     entry = repo_entry or {}
     commit = str(entry.get("commit", "")).strip()
@@ -94,13 +92,11 @@ def pick_ref(repo_entry: dict[str, Any] | None) -> str:
 def default_path(repo_key: str) -> str:
     if repo_key in CORE_REPOS:
         return CORE_REPOS[repo_key][0]
-    if repo_key in PATH_ALIASES:
-        return PATH_ALIASES[repo_key]
     name = repo_key.split("/", 1)[-1].strip()
     if not name:
         raise ValueError(f"Invalid repo key: {repo_key!r}")
-    if name in WL_REPO_NAMES:
-        return "stanley-wl"
+    if is_wl_repo_name(name):
+        return name
     return f"extensions/{name}"
 
 
@@ -108,7 +104,7 @@ def default_pipelines(repo_key: str, source: str) -> frozenset[str]:
     if repo_key in CORE_REPOS:
         return CORE_REPOS[repo_key][1]
     name = repo_key.split("/", 1)[-1].strip()
-    if name in WL_REPO_NAMES:
+    if is_wl_repo_name(name):
         return frozenset({"console"})
     if source == "handlers":
         return frozenset({"handlers"})
@@ -210,13 +206,44 @@ def python_package_to_repo(name: str) -> str | None:
     return None
 
 
-def npm_package_to_repo(name: str) -> str | None:
-    if name == "@stanley/wl":
-        return "renglo/stanley-wl"
+def npm_wl_package(data: dict[str, Any]) -> str:
+    """First ``@*/wl`` pin, if any. Empty when the BOM has no white-label pack."""
+    for name in package_pins(data, "npm"):
+        if WL_NPM_NAME.match(name):
+            return name
+    return ""
+
+
+def npm_pin_repo_keys(name: str, repos: dict[str, Any]) -> list[str]:
+    """BOM ``repos`` keys that this npm pin replaces (do not invent tenant orgs)."""
+    if name == CONSOLE_NPM_PACKAGE:
+        return ["renglo/console"] if "renglo/console" in repos else []
+    if WL_NPM_NAME.match(name):
+        scope = name[1:].split("/", 1)[0]
+        keys: list[str] = []
+        for key in repos:
+            short = str(key).split("/", 1)[-1]
+            if short == "wl" or short == f"{scope}-wl":
+                keys.append(str(key))
+        return keys
+    if name.startswith("@") and "/" in name:
+        scope, pkg = name[1:].split("/", 1)
+        guessed = f"{scope}/{pkg}"
+        return [guessed] if guessed in repos else []
+    return []
+
+
+def npm_package_to_repo(name: str, repos: dict[str, Any] | None = None) -> str | None:
+    """Repo key a pin skips, if that key is in ``repos``.
+
+    ``@renglo/name`` still maps to ``renglo/name`` when ``repos`` is omitted
+    (unit tests and callers that only have the pin name).
+    """
+    if repos is not None:
+        keys = npm_pin_repo_keys(name, repos)
+        return keys[0] if keys else None
     if name.startswith("@renglo/"):
         return f"renglo/{name.split('/', 1)[1]}"
-    if name.startswith("@stanley/"):
-        return f"stanley/{name.split('/', 1)[1]}"
     return None
 
 
@@ -241,9 +268,9 @@ def repos_skipped_by_pins(data: dict[str, Any], pipeline: str) -> set[str]:
             if repo:
                 skipped.add(repo)
     if pipeline == "console":
+        repos = data.get("repos") if isinstance(data.get("repos"), dict) else {}
         for name in package_pins(data, "npm"):
-            repo = npm_package_to_repo(name)
-            if repo:
+            for repo in npm_pin_repo_keys(name, repos):
                 skipped.add(repo)
     return skipped
 
@@ -423,6 +450,7 @@ def ci_outputs(
         "has_npm_local": "true" if local_npm else "false",
         "console_host_spec": host,
         "has_console_pin": "true" if host else "false",
+        "vite_wl_package": npm_wl_package(data),
         "repo_count": str(len(checkout)),
     }
 

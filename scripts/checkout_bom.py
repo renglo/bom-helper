@@ -155,6 +155,8 @@ def main() -> int:
         "extension_handles": ",".join(extension_handles(specs)),
     }
     print(f"  vite_extensions={outputs['vite_extensions'] or '(none)'}")
+    if outputs.get("vite_wl_package"):
+        print(f"  vite_wl_package={outputs['vite_wl_package']}")
     if outputs["python_specs"]:
         print(f"  python_specs={outputs['python_specs']}")
     if outputs["npm_specs"]:
