@@ -517,7 +517,7 @@ def main() -> int:
     if args.pipeline == "console":
         candidates = extension_handles(selected)
         print(f"  console extension candidates: {','.join(candidates) or '(none)'}")
-        print("  VITE_EXTENSIONS is finalized after checkout (dirs with ui/) plus npm pins")
+        print("  console discovers UI from extensions/*/ui and npm pins (no VITE_EXTENSIONS)")
     return 0
 
 
