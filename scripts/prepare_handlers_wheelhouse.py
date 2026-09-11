@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a handlers wheelhouse + thin assets tree for extensions-service Lambda builds.
+"""Build a handlers wheelhouse + thin assets tree for extensions-service builds.
 
 Produces::
 
@@ -21,6 +21,11 @@ Pre-downloaded artifacts (CI)::
       --from-artifacts /tmp/wheels \\
       --packages arbitium-lab,arbitium-triage \\
       --out .handlers-build
+
+ECS / large image (same wheelhouse, plus [large-dependencies] wheels)::
+
+    python scripts/prepare_handlers_wheelhouse.py \\
+      --from-monorepo ... --with-large-deps --out .handlers-build
 """
 
 from __future__ import annotations
@@ -207,17 +212,95 @@ def extract_assets(wheelhouse: Path, assets_dir: Path, packages: list[str]) -> N
         )
 
 
+LARGE_EXTRA = "large-dependencies"
+
+
+def _artifact_version(path: Path) -> str | None:
+    """Best-effort version from a wheel or sdist filename."""
+    if path.suffix == ".whl":
+        parts = path.name[: -len(".whl")].split("-")
+        if len(parts) >= 2:
+            return parts[1]
+        return None
+    m = _SDIST_RE.match(path.name)
+    return m.group("version") if m else None
+
+
+def version_in_wheelhouse(wheelhouse: Path, dist_name: str) -> str | None:
+    """Pick the highest version for ``dist_name`` already present in wheelhouse."""
+    versions = [
+        v
+        for p in _find_artifacts(wheelhouse, dist_name)
+        if (v := _artifact_version(p))
+    ]
+    if not versions:
+        return None
+    try:
+        from packaging.version import Version
+
+        return str(max(versions, key=Version))
+    except Exception:
+        return sorted(versions)[-1]
+
+
+def pin_specs(
+    packages: list[str],
+    wheelhouse: Path | None = None,
+    *,
+    extra: str | None = None,
+) -> list[str]:
+    """Return pip specs, pinning ``==version`` when that dist is already in wheelhouse.
+
+    Avoids CodeArtifact older builds (e.g. 0.0.4) fighting a local monorepo wheel
+    (0.0.5) during ``pip download name[large-dependencies]``.
+    """
+    out: list[str] = []
+    for name in packages:
+        name = name.strip()
+        if not name:
+            continue
+        # Strip a caller-provided extra so we can re-apply cleanly.
+        base = name
+        had_extra = None
+        if "[" in name and name.endswith("]"):
+            base, rest = name.split("[", 1)
+            had_extra = rest[:-1]
+            base = base.strip()
+        use_extra = extra if extra is not None else had_extra
+        spec = f"{base}[{use_extra}]" if use_extra else base
+        ver = version_in_wheelhouse(wheelhouse, base) if wheelhouse is not None else None
+        if ver:
+            spec = f"{spec}=={ver}"
+        out.append(spec)
+    return out
+
+
+def large_extra_specs(
+    packages: list[str], wheelhouse: Path | None = None
+) -> list[str]:
+    """Return ``name[large-dependencies]==ver`` specs for pip download/install."""
+    return pin_specs(packages, wheelhouse, extra=LARGE_EXTRA)
+
+
 def download_deps(
     wheelhouse: Path,
     packages: list[str],
     *,
     platform: str = "manylinux2014_x86_64",
     python_version: str = "3.12",
+    strict: bool = False,
+    extra_index_urls: list[str] | None = None,
 ) -> None:
     """Download transitive deps into wheelhouse so Docker can use --no-index.
 
     Defaults to Lambda's linux/amd64 tags so a Windows host does not poison the
     wheelhouse with win_amd64 wheels.
+
+    When ``strict`` is True (used for ``--with-large-deps``), any pip failure
+    raises instead of warning and continuing with an incomplete wheelhouse.
+
+    ``extra_index_urls`` (e.g. PyPI) helps when CodeArtifact does not mirror
+    heavy public wheels like recent numpy/tensorflow.
     """
     if not packages:
         return
@@ -245,6 +328,8 @@ def download_deps(
         abi,
         "--only-binary=:all:",
     ]
+    for url in extra_index_urls or []:
+        base.extend(["--extra-index-url", url])
     try:
         subprocess.run([*base, *packages], check=True)
         return
@@ -254,15 +339,23 @@ def download_deps(
             "(private deps may be missing until CodeArtifact login)",
             file=sys.stderr,
         )
+    failures: list[str] = []
     for pkg in packages:
         try:
             subprocess.run([*base, pkg], check=True)
         except subprocess.CalledProcessError as exc:
+            failures.append(pkg)
             print(
                 f"WARNING: pip download failed for {pkg!r} (exit {exc.returncode}); "
                 f"ensure the dist and its deps are already in the wheelhouse",
                 file=sys.stderr,
             )
+    if failures and strict:
+        raise RuntimeError(
+            "pip download failed for required specs: "
+            + ", ".join(failures)
+            + ". Clean the wheelhouse and/or pin local package versions."
+        )
 
 
 def prepare(
@@ -272,6 +365,7 @@ def prepare(
     from_artifacts: Path | None,
     packages: list[str] | None,
     skip_deps: bool,
+    with_large_deps: bool = False,
 ) -> list[str]:
     out_dir = out_dir.resolve()
     wheelhouse = out_dir / "wheelhouse"
@@ -313,12 +407,23 @@ def prepare(
         raise ValueError("no packages to prepare; pass --from-monorepo and/or --packages")
 
     if not skip_deps:
-        download_deps(wheelhouse, ordered)
+        download_deps(wheelhouse, pin_specs(ordered, wheelhouse))
+        if with_large_deps:
+            extras = large_extra_specs(ordered, wheelhouse)
+            print(f"pip download [{LARGE_EXTRA}] for: {', '.join(extras)}")
+            # CodeArtifact often lags public ML wheels (numpy>=2.3, tensorflow, …).
+            download_deps(
+                wheelhouse,
+                extras,
+                strict=True,
+                extra_index_urls=["https://pypi.org/simple"],
+            )
 
     extract_assets(wheelhouse, assets_dir, ordered)
 
     meta = {
         "packages": ordered,
+        "with_large_deps": with_large_deps,
         "wheelhouse": str(wheelhouse),
         "assets": str(assets_dir),
     }
@@ -357,6 +462,14 @@ def main() -> int:
         action="store_true",
         help="Do not pip download transitive deps into the wheelhouse",
     )
+    parser.add_argument(
+        "--with-large-deps",
+        action="store_true",
+        help=(
+            f"Also pip download name[{LARGE_EXTRA}] for each package "
+            "(ECS / --large image wheelhouse)"
+        ),
+    )
     args = parser.parse_args()
 
     monorepo = [
@@ -382,6 +495,12 @@ def main() -> int:
         if not pkg.is_dir():
             print(f"ERROR: package dir not found: {pkg}", file=sys.stderr)
             return 1
+    if args.with_large_deps and args.skip_deps:
+        print(
+            "ERROR: --with-large-deps requires dependency download; omit --skip-deps",
+            file=sys.stderr,
+        )
+        return 1
 
     try:
         ordered = prepare(
@@ -390,12 +509,15 @@ def main() -> int:
             from_artifacts=artifacts,
             packages=packages,
             skip_deps=args.skip_deps,
+            with_large_deps=args.with_large_deps,
         )
     except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
     print(f"prepared {len(ordered)} package(s): {', '.join(ordered)}")
+    if args.with_large_deps:
+        print(f"  large deps: [{LARGE_EXTRA}] downloaded into wheelhouse")
     print(f"  wheelhouse: {Path(args.out).resolve() / 'wheelhouse'}")
     print(f"  assets:     {Path(args.out).resolve() / 'handlers-assets'}")
     return 0
