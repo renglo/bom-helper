@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+"""Tests for prepare_handlers_wheelhouse asset extraction."""
+
+from __future__ import annotations
+
+import io
+import sys
+import tarfile
+import tempfile
+import unittest
+from pathlib import Path
+
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+sys.path.insert(0, str(SCRIPTS))
+
+from prepare_handlers_wheelhouse import extract_assets, normalize_dist_name  # noqa: E402
+
+
+def _write_sdist(dest: Path, dist: str, version: str, *, router: bool, config: dict | None) -> Path:
+    """Create a minimal sdist tarball under dest."""
+    # PEP 625-ish filename: name-version.tar.gz (underscores ok in archive name)
+    file_name = f"{dist.replace('-', '_')}-{version}.tar.gz"
+    # Actually pip uses normalized name with hyphens often; use hyphen form
+    file_name = f"{dist}-{version}.tar.gz"
+    archive = dest / file_name
+    root_name = f"{dist}-{version}"
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        def _add(name: str, data: bytes) -> None:
+            info = tarfile.TarInfo(name=f"{root_name}/{name}")
+            info.size = len(data)
+            tf.addfile(info, io.BytesIO(data))
+
+        _add("pyproject.toml", b'[project]\nname = "x"\n')
+        if router:
+            _add("lambda_router.py", b"# router\n")
+        if config is not None:
+            import json
+
+            _add("handlers_config.json", json.dumps(config).encode())
+    archive.write_bytes(buf.getvalue())
+    return archive
+
+
+class PrepareAssetsTest(unittest.TestCase):
+    def test_normalize(self) -> None:
+        self.assertEqual(normalize_dist_name("Arbitium_Lab"), "arbitium-lab")
+
+    def test_extract_primary_and_extra(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            wheelhouse = root / "wheelhouse"
+            assets = root / "handlers-assets"
+            wheelhouse.mkdir()
+            _write_sdist(
+                wheelhouse,
+                "arbitium-lab",
+                "0.0.1",
+                router=True,
+                config={"handlers": {"a": {}}},
+            )
+            _write_sdist(
+                wheelhouse,
+                "arbitium-triage",
+                "0.0.1",
+                router=True,
+                config={"handlers": {"b": {}}},
+            )
+            extract_assets(
+                wheelhouse,
+                assets,
+                ["arbitium-lab", "arbitium-triage"],
+            )
+            self.assertTrue((assets / "lambda_router.py").is_file())
+            self.assertTrue((assets / "handlers_config.json").is_file())
+            extra = assets / "extras" / "arbitium-triage" / "handlers_config.json"
+            self.assertTrue(extra.is_file())
+            text = (assets / "handlers_config.json").read_text(encoding="utf-8")
+            self.assertIn('"a"', text)
+            self.assertNotIn('"b"', text)  # extra stays under extras/
+
+
+if __name__ == "__main__":
+    unittest.main()

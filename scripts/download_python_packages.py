@@ -18,7 +18,28 @@ def main() -> int:
     parser.add_argument(
         "--dest",
         default="wheels",
-        help="Directory to write wheels into (default: wheels)",
+        help="Directory to write wheels/sdists into (default: wheels)",
+    )
+    parser.add_argument(
+        "--targets",
+        default="",
+        help="Optional deploy_targets.yml (accepted for compose/CI compatibility)",
+    )
+    parser.add_argument(
+        "--find-links",
+        action="append",
+        default=[],
+        help="Extra pip find-links directory (repeatable)",
+    )
+    parser.add_argument(
+        "--no-deps",
+        action="store_true",
+        help="Pass --no-deps to pip download",
+    )
+    parser.add_argument(
+        "--sdist",
+        action="store_true",
+        help="Download source distributions only (--no-binary :all:)",
     )
     args = parser.parse_args()
 
@@ -37,11 +58,18 @@ def main() -> int:
         return 0
 
     dest.mkdir(parents=True, exist_ok=True)
+    cmd = [sys.executable, "-m", "pip", "download", "-d", str(dest)]
+    if args.no_deps:
+        cmd.append("--no-deps")
+    if args.sdist:
+        cmd.extend(["--no-binary", ":all:"])
+    for link in args.find_links:
+        cmd.extend(["--find-links", str(Path(link).expanduser().resolve())])
+    cmd.extend(specs)
+
     print(f"Downloading {len(specs)} pin(s) into {dest.resolve()}")
-    subprocess.run(
-        [sys.executable, "-m", "pip", "download", "-d", str(dest), *specs],
-        check=True,
-    )
+    print("+", " ".join(cmd))
+    subprocess.run(cmd, check=True)
     return 0
 
 

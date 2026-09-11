@@ -26,11 +26,12 @@ from bom_manifest import (
     checkout_specs,
     ci_outputs,
     extension_handles,
-    handlers_build_flags,
+    handlers_python_packages,
     load_bom,
     npm_extension_handles,
     package_pins,
     pipeline_has_work,
+    python_handlers_handles,
     resolve_specs,
     scan_vite_extensions,
     write_github_output,
@@ -111,7 +112,7 @@ def main() -> int:
         data = load_bom(bom_file)
         all_specs = resolve_specs(bom_file, data)
         specs = checkout_specs(all_specs, args.pipeline, data)
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError, json.JSONDecodeError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
 
@@ -146,13 +147,18 @@ def main() -> int:
     vite_names = list(dict.fromkeys([*vite_extensions, *npm_extension_handles(data)]))
     if args.pipeline == "console" and not vite_names:
         print("Warning: no extensions/*/ui directories or npm UI pins; VITE_EXTENSIONS will be empty.", file=sys.stderr)
-    primary, extras = handlers_build_flags(specs)
+    all_pins, handler_pkgs = handlers_python_packages(data)
+    pin_handles = python_handlers_handles(data)
     outputs = {
         **ci_outputs(data, specs, dest_root=dest_root),
         "vite_extensions": ",".join(vite_names),
-        "handlers_extension_repo": primary,
-        "handlers_extra_extensions": extras,
-        "extension_handles": ",".join(extension_handles(specs)),
+        "handlers_packages": ",".join(handler_pkgs),
+        "handlers_wheelhouse_packages": ",".join(all_pins),
+        "extension_handles": ",".join(
+            list(dict.fromkeys([*pin_handles, *extension_handles(specs)]))
+            if args.pipeline == "handlers"
+            else extension_handles(specs)
+        ),
     }
     print(f"  vite_extensions={outputs['vite_extensions'] or '(none)'}")
     if outputs.get("vite_wl_package"):
@@ -166,8 +172,11 @@ def main() -> int:
     if outputs["console_host_spec"]:
         print(f"  console_host_spec={outputs['console_host_spec']}")
     if args.pipeline == "handlers":
-        print(f"  handlers_extension_repo={primary or '(none)'}")
-        print(f"  handlers_extra_extensions={extras or '(none)'}")
+        print(f"  handlers_packages={outputs['handlers_packages'] or '(none)'}")
+        print(
+            f"  handlers_wheelhouse_packages="
+            f"{outputs['handlers_wheelhouse_packages'] or '(none)'}"
+        )
     write_github_output(outputs)
     return 0
 
