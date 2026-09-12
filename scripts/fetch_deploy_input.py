@@ -114,6 +114,39 @@ def _merge_var_from_ssm(
     vars_block[var_key] = val
 
 
+def _load_platform_env_overlay(path: Path) -> dict[str, str]:
+    """Load flat KEY: value YAML/JSON; values coerced to strings."""
+    text = path.read_text(encoding="utf-8")
+    data: Any
+    if path.suffix.lower() in {".yml", ".yaml"}:
+        try:
+            import yaml
+        except ImportError as exc:
+            raise RuntimeError("PyYAML required for --overlay-env YAML files") from exc
+        data = yaml.safe_load(text) or {}
+    else:
+        data = json.loads(text)
+    if not isinstance(data, dict):
+        raise ValueError(f"{path}: overlay must be a mapping")
+    out: dict[str, str] = {}
+    for key, value in data.items():
+        if value is None:
+            continue
+        out[str(key)] = str(value).strip() if not isinstance(value, (dict, list)) else json.dumps(value)
+    return out
+
+
+def _overlay_platform_env(payload: dict[str, Any], overlay: dict[str, str]) -> None:
+    """Merge overlay into VARS; overlay wins on key clash."""
+    vars_block = payload.setdefault("VARS", {})
+    if not isinstance(vars_block, dict):
+        vars_block = {}
+        payload["VARS"] = vars_block
+    for key, value in overlay.items():
+        if value:
+            vars_block[key] = value
+
+
 def _runtime_env(payload: dict[str, Any], stage: str = "") -> dict[str, str]:
     vars_block = payload.get("VARS") or {}
     secrets_block = payload.get("SECRETS") or {}
@@ -169,6 +202,11 @@ def main() -> int:
         help="Write lambda_env_merge.json for deploy_lambda_codedeploy.py",
     )
     parser.add_argument("--stage", default="", help="Stage label for SYS_ENV when exporting lambda merge")
+    parser.add_argument(
+        "--overlay-env",
+        default="",
+        help="YAML/JSON file of VARS overlays (platform_env.yml); overlay wins over SSM",
+    )
     args = parser.parse_args()
 
     payload = _fetch_ssm_json(args.parameter, args.region)
@@ -185,6 +223,18 @@ def main() -> int:
             print(f"Invalid --merge-parameter: {spec!r}", file=sys.stderr)
             return 1
         _merge_var_from_ssm(payload, var_key, param_name, args.region)
+
+    if args.overlay_env:
+        overlay_path = Path(args.overlay_env)
+        if not overlay_path.is_file():
+            print(f"overlay-env not found: {overlay_path}", file=sys.stderr)
+            return 1
+        try:
+            _overlay_platform_env(payload, _load_platform_env_overlay(overlay_path))
+        except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
+            print(f"overlay-env failed: {exc}", file=sys.stderr)
+            return 1
+        print(f"Applied overlay from {overlay_path}")
 
     if args.output:
         out = Path(args.output)

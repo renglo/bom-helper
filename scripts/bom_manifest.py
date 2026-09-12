@@ -206,6 +206,42 @@ def python_package_to_repo(name: str) -> str | None:
     return None
 
 
+def python_handlers_handle(name: str) -> str | None:
+    """Return dist name for handlers-relevant pins; None for core lib/api/ci.
+
+    Image builds install by dist name (``--packages``). Runtime folder handles
+    are not derived here.
+    """
+    if name in CORE_PYTHON_TO_REPO:
+        return None
+    if name.startswith("renglo-"):
+        short = name.removeprefix("renglo-")
+        if short in ("lib", "api", "ci"):
+            return None
+        return name
+    return name
+
+
+def python_handlers_handles(data: dict[str, Any]) -> list[str]:
+    out: list[str] = []
+    for name in package_pins(data, "python"):
+        handle = python_handlers_handle(name)
+        if handle and handle not in out:
+            out.append(handle)
+    return out
+
+
+def handlers_python_packages(data: dict[str, Any]) -> tuple[list[str], list[str]]:
+    """Return (all python pins, handler install pins).
+
+    Handler install pins omit ``renglo-*`` (those are deps / core, not ``--packages``
+    image modules). All pins belong in the prepare wheelhouse.
+    """
+    all_pins = list(package_pins(data, "python"))
+    handlers = [p for p in all_pins if not p.startswith("renglo-")]
+    return all_pins, handlers
+
+
 def npm_wl_package(data: dict[str, Any]) -> str:
     """First ``@*/wl`` pin, if any. Empty when the BOM has no white-label pack."""
     for name in package_pins(data, "npm"):
@@ -352,8 +388,22 @@ def extension_handles(specs: list[RepoSpec]) -> list[str]:
     return [s.shortname for s in specs if s.is_extension]
 
 
-def handlers_build_flags(specs: list[RepoSpec]) -> tuple[str, str]:
-    handles = extension_handles(specs)
+def handlers_build_flags(
+    specs: list[RepoSpec],
+    data: dict[str, Any] | None = None,
+) -> tuple[str, str]:
+    """First handler dist + extras (checkout GITHUB_OUTPUT only).
+
+    Prefer ``handlers_python_packages`` for ``run.py build --packages``.
+    """
+    handles: list[str] = []
+    if data is not None:
+        for handle in python_handlers_handles(data):
+            if handle not in handles:
+                handles.append(handle)
+    for handle in extension_handles(specs):
+        if handle not in handles:
+            handles.append(handle)
     if not handles:
         return "", ""
     return handles[0], ",".join(handles[1:])
@@ -479,7 +529,7 @@ def main() -> int:
         data = load_bom(path)
         specs = resolve_specs(path, data)
         selected = checkout_specs(specs, args.pipeline, data) if args.pipeline else specs
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError, json.JSONDecodeError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
 
@@ -510,10 +560,10 @@ def main() -> int:
         print(pins)
     print(format_plan(selected))
     if args.pipeline == "handlers":
-        primary, extras = handlers_build_flags(selected)
-        print(f"  handlers --extension-repo {primary or '(none)'}")
-        if extras:
-            print(f"  handlers --extra-extensions {extras}")
+        _all, handlers = handlers_python_packages(data)
+        print(f"  handlers --packages {','.join(handlers) or '(none)'}")
+        if _all:
+            print(f"  handlers wheelhouse pins: {','.join(_all)}")
     if args.pipeline == "console":
         candidates = extension_handles(selected)
         print(f"  console extension candidates: {','.join(candidates) or '(none)'}")
