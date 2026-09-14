@@ -3,7 +3,7 @@
 
 Sequence (per BOM deploy pipeline):
   1. lambda:UpdateFunctionCode with Publish=False ($LATEST gets new image)
-  2. Optionally lambda:UpdateFunctionConfiguration to merge env vars from JSON
+  2. Optionally lambda:UpdateFunctionConfiguration to replace runtime env from JSON
   3. Wait until function is Active / LastUpdateStatus Successful
   4. lambda:PublishVersion -> immutable version number
   5. codedeploy:CreateDeployment with AppSpecContent shifting alias traffic
@@ -21,45 +21,7 @@ from typing import Any
 
 import boto3
 
-# Keys Lambda rejects or that should never be set from CI merge (see also renglo schd external_handler_runner).
-RESERVED_LAMBDA_ENV_KEYS = frozenset(
-    {
-        "AWS_REGION",
-        "AWS_DEFAULT_REGION",
-        "AWS_EXECUTION_ENV",
-        "AWS_ACCESS_KEY_ID",
-        "AWS_SECRET_ACCESS_KEY",
-        "AWS_SESSION_TOKEN",
-        "AWS_SECURITY_TOKEN",
-        "AWS_LAMBDA_FUNCTION_NAME",
-        "AWS_LAMBDA_FUNCTION_VERSION",
-        "AWS_LAMBDA_FUNCTION_MEMORY_SIZE",
-        "AWS_LAMBDA_LOG_GROUP_NAME",
-        "AWS_LAMBDA_LOG_STREAM_NAME",
-        "AWS_LAMBDA_RUNTIME_API",
-        "AWS_LAMBDA_INITIALIZATION_TYPE",
-        "AWS_XRAY_CONTEXT_MISSING",
-        "AWS_XRAY_DAEMON_ADDRESS",
-    }
-)
-
-# Never push GitHub / CodeDeploy / CI-only keys into Lambda environment.
-CI_ONLY_ENV_PREFIXES = ("CODEDEPLOY_", "AWS_GITHUB_", "AWS_ECR_")
-CI_ONLY_ENV_KEYS = frozenset({"AWS_ECR_REPOSITORY", "LAMBDA_BACKEND_ARN"})
-
-
-def _is_reserved_env_key(key: str) -> bool:
-    k = key.strip()
-    if not k:
-        return True
-    if k in RESERVED_LAMBDA_ENV_KEYS or k in CI_ONLY_ENV_KEYS:
-        return True
-    if k.startswith("AWS_LAMBDA_"):
-        return True
-    for prefix in CI_ONLY_ENV_PREFIXES:
-        if k.startswith(prefix):
-            return True
-    return False
+from lambda_env import assert_under_lambda_limit, filter_lambda_env
 
 
 def _wait_for_function_updated(lambda_client, function_name: str, timeout_s: int = 600) -> None:
@@ -84,16 +46,12 @@ def _load_env_merge(path: str | None) -> dict[str, str]:
         data: Any = json.load(f)
     if not isinstance(data, dict):
         raise ValueError("merge-lambda-env-json must be a JSON object")
-    out: dict[str, str] = {}
+    raw: dict[str, str] = {}
     for k, v in data.items():
-        sk = str(k).strip()
-        if _is_reserved_env_key(sk):
-            print(f"Skipping reserved/CI-only env key: {sk}", file=sys.stderr)
-            continue
         if v is None:
             continue
-        out[sk] = str(v)
-    return out
+        raw[str(k).strip()] = str(v)
+    return filter_lambda_env(raw, log=True)
 
 
 def _build_appspec_yaml(*, function_name: str, alias: str, current_version: str, target_version: str) -> str:
@@ -148,11 +106,16 @@ def main() -> int:
 
     merge = _load_env_merge(args.merge_lambda_env_json or None)
     if merge:
-        print(f"UpdateFunctionConfiguration merging {len(merge)} env var(s)...", file=sys.stderr)
-        existing = lam.get_function_configuration(FunctionName=args.function_name)
-        env_vars: dict[str, str] = dict(existing.get("Environment", {}).get("Variables", {}))
-        env_vars.update(merge)
-        lam.update_function_configuration(FunctionName=args.function_name, Environment={"Variables": env_vars})
+        size = assert_under_lambda_limit(merge)
+        print(
+            f"UpdateFunctionConfiguration replacing env with {len(merge)} runtime "
+            f"var(s) ({size} bytes)...",
+            file=sys.stderr,
+        )
+        lam.update_function_configuration(
+            FunctionName=args.function_name,
+            Environment={"Variables": merge},
+        )
         _wait_for_function_updated(lam, args.function_name)
 
     print("PublishVersion...", file=sys.stderr)

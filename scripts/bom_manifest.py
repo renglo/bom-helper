@@ -210,9 +210,11 @@ def python_handlers_handle(name: str) -> str | None:
     """Return dist name for handlers-relevant pins; None for core lib/api/ci.
 
     Image builds install by dist name (``--packages``). Runtime folder handles
-    are not derived here.
+    are not derived here. White-label packs (``*-wl``) are branding, not handlers.
     """
     if name in CORE_PYTHON_TO_REPO:
+        return None
+    if is_wl_repo_name(name):
         return None
     if name.startswith("renglo-"):
         short = name.removeprefix("renglo-")
@@ -238,7 +240,11 @@ def handlers_python_packages(data: dict[str, Any]) -> tuple[list[str], list[str]
     image modules). All pins belong in the prepare wheelhouse.
     """
     all_pins = list(package_pins(data, "python"))
-    handlers = [p for p in all_pins if not p.startswith("renglo-")]
+    handlers = [
+        p
+        for p in all_pins
+        if not p.startswith("renglo-") and not is_wl_repo_name(p)
+    ]
     return all_pins, handlers
 
 
