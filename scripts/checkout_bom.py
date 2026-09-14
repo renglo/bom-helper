@@ -147,7 +147,8 @@ def main() -> int:
     vite_names = list(dict.fromkeys([*vite_extensions, *npm_extension_handles(data)]))
     if args.pipeline == "console" and not vite_names:
         print("Warning: no extensions/*/ui directories or npm UI pins after checkout.", file=sys.stderr)
-    primary, extras = handlers_build_flags(specs)
+    all_pins, handler_pkgs = handlers_python_packages(data)
+    pin_handles = python_handlers_handles(data)
     outputs = {
         **ci_outputs(data, specs, dest_root=dest_root),
         "vite_extensions": ",".join(vite_names),
