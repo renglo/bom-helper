@@ -31,6 +31,7 @@ class LambdaEnvTests(unittest.TestCase):
                 "AWS_REGION": "us-east-1",
                 "LAMBDA_BACKEND_ARN": "arn:aws:lambda:...",
                 "OPENAI_API_KEY": "sk-test",
+                "EXTERNAL_HANDLERS_ECS_HANDLERS": "arbitium:aws_threats;arbitiumtriage:aws_aid_networks",
                 "bad-key": "nope",
             }
         )

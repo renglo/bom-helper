@@ -44,6 +44,9 @@ CI_ONLY_ENV_KEYS = frozenset(
     }
 )
 CONSOLE_ONLY_ENV_PREFIXES = ("VITE_", "AMPLIFY_")
+# Huge routing maps belong on handlers deploy_input / package handlers_config,
+# not on the backend Lambda 4KB environment.
+HANDLERS_ONLY_ENV_KEYS = frozenset({"EXTERNAL_HANDLERS_ECS_HANDLERS"})
 
 
 def is_reserved_env_key(key: str) -> bool:
@@ -78,7 +81,11 @@ def filter_lambda_env(
         if raw_val is None:
             continue
         value = str(raw_val)
-        if is_reserved_env_key(key) or is_console_only_env_key(key):
+        if (
+            is_reserved_env_key(key)
+            or is_console_only_env_key(key)
+            or key in HANDLERS_ONLY_ENV_KEYS
+        ):
             skipped.append(key)
             continue
         if not LAMBDA_KEY_RE.fullmatch(key):
