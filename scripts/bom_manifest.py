@@ -211,9 +211,11 @@ def python_handlers_handle(name: str) -> str | None:
     """Return dist name for handlers-relevant pins; None for core lib/api/ci.
 
     Image builds install by dist name (``--packages``). Runtime folder handles
-    are not derived here.
+    are not derived here. White-label packs (``*-wl``) are branding, not handlers.
     """
     if name in CORE_PYTHON_TO_REPO:
+        return None
+    if is_wl_repo_name(name):
         return None
     if name.startswith("renglo-"):
         short = name.removeprefix("renglo-")
@@ -235,10 +237,11 @@ def python_handlers_handles(data: dict[str, Any]) -> list[str]:
 def handlers_python_packages(data: dict[str, Any]) -> tuple[list[str], list[str]]:
     """Return (all python pins, image install pins).
 
-    Both lists are the same ordered pin set: ``renglo-lib`` first (when present),
-    then other ``renglo-*``, then extension dists. Prepare puts all of them in the
-    wheelhouse; ``run.py build --packages`` installs that full list (no git clone
-    of ``dev/renglo-lib``). ``install_large_extras`` skips ``renglo-*`` for the
+    Install pins keep ``renglo-lib`` first (when present), then other ``renglo-*``,
+    then extension dists. White-label packs (``*-wl``) stay in the wheelhouse list
+    but are omitted from ``--packages``. Prepare puts all pins in the wheelhouse;
+    ``run.py build --packages`` installs that ordered list (no git clone of
+    ``dev/renglo-lib``). ``install_large_extras`` skips ``renglo-*`` for the
     ``[large-dependencies]`` step.
     """
     all_pins = list(package_pins(data, "python"))
@@ -250,7 +253,10 @@ def handlers_python_packages(data: dict[str, Any]) -> tuple[list[str], list[str]
             return (1, name)
         return (2, name)
 
-    install = sorted(all_pins, key=_install_key)
+    install = sorted(
+        (p for p in all_pins if not is_wl_repo_name(p)),
+        key=_install_key,
+    )
     return all_pins, install
 
 

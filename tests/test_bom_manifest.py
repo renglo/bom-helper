@@ -24,6 +24,7 @@ from bom_manifest import (  # noqa: E402
     npm_wl_package,
     package_pins,
     pipeline_has_work,
+    python_handlers_handles,
     python_install_specs,
     resolve_specs,
     repos_skipped_by_pins,
@@ -171,6 +172,26 @@ class BomManifestV2Tests(unittest.TestCase):
         specs = resolve_specs(path, data)
         self.assertEqual(specs[0].path, "wl")
         self.assertEqual(specs[0].pipelines, frozenset({"console"}))
+
+    def test_python_wl_pin_is_not_a_handler(self) -> None:
+        path = _write(
+            Path(self._tmp("wl-py.json")),
+            {
+                "version": "v0.1.4",
+                "python": {
+                    "renglo-lib": "0.0.3",
+                    "renglo-api": "0.0.5",
+                    "arbitium-lab": "0.0.4",
+                    "arbitium-wl": "0.0.2",
+                },
+            },
+        )
+        data = load_bom(path)
+        _all, handlers = handlers_python_packages(data)
+        self.assertIn("arbitium-wl", _all)
+        self.assertNotIn("arbitium-wl", handlers)
+        self.assertNotIn("arbitium-wl", python_handlers_handles(data))
+        self.assertIn("arbitium-lab", handlers)
 
     def test_wl_npm_pin_skips_matching_clone(self) -> None:
         path = _write(
