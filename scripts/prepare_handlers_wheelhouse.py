@@ -215,6 +215,94 @@ def extract_assets(wheelhouse: Path, assets_dir: Path, packages: list[str]) -> N
 LARGE_EXTRA = "large-dependencies"
 
 
+def _provides_extra_from_metadata_text(text: str, extra: str) -> bool:
+    want = extra.strip().lower()
+    for line in text.splitlines():
+        if line.lower().startswith("provides-extra:"):
+            value = line.split(":", 1)[1].strip().lower()
+            if value == want:
+                return True
+    return False
+
+
+def _provides_extra_from_pyproject(text: str, extra: str) -> bool:
+    try:
+        data = tomllib.loads(text)
+    except Exception:
+        return False
+    opts = (data.get("project") or {}).get("optional-dependencies") or {}
+    return extra in opts
+
+
+def _wheel_provides_extra(path: Path, extra: str) -> bool:
+    try:
+        with zipfile.ZipFile(path) as zf:
+            names = [n for n in zf.namelist() if n.endswith(".dist-info/METADATA")]
+            if not names:
+                return False
+            return _provides_extra_from_metadata_text(
+                zf.read(names[0]).decode("utf-8", errors="replace"), extra
+            )
+    except (OSError, zipfile.BadZipFile):
+        return False
+
+
+def _sdist_provides_extra(path: Path, extra: str) -> bool:
+    try:
+        if path.name.endswith(".tar.gz"):
+            with tarfile.open(path, "r:gz") as tf:
+                members = [m for m in tf.getmembers() if m.isfile()]
+                for m in members:
+                    if Path(m.name).name == "PKG-INFO":
+                        f = tf.extractfile(m)
+                        if f and _provides_extra_from_metadata_text(
+                            f.read().decode("utf-8", errors="replace"), extra
+                        ):
+                            return True
+                for m in members:
+                    if Path(m.name).name == "pyproject.toml":
+                        f = tf.extractfile(m)
+                        if f and _provides_extra_from_pyproject(
+                            f.read().decode("utf-8", errors="replace"), extra
+                        ):
+                            return True
+        elif path.suffix == ".zip":
+            with zipfile.ZipFile(path) as zf:
+                for name in zf.namelist():
+                    if Path(name).name == "PKG-INFO":
+                        if _provides_extra_from_metadata_text(
+                            zf.read(name).decode("utf-8", errors="replace"), extra
+                        ):
+                            return True
+                for name in zf.namelist():
+                    if Path(name).name == "pyproject.toml":
+                        if _provides_extra_from_pyproject(
+                            zf.read(name).decode("utf-8", errors="replace"), extra
+                        ):
+                            return True
+    except (OSError, tarfile.TarError, zipfile.BadZipFile):
+        return False
+    return False
+
+
+def dist_provides_extra(
+    wheelhouse: Path, dist_name: str, extra: str = LARGE_EXTRA
+) -> bool:
+    """True if a wheelhouse artifact declares ``Provides-Extra`` / optional-dep."""
+    arts = _find_artifacts(wheelhouse, dist_name)
+    if not arts:
+        return False
+    wheels = [p for p in arts if p.suffix == ".whl"]
+    sdists = [p for p in arts if p.name.endswith((".tar.gz", ".zip"))]
+    for path in wheels + sdists:
+        if path.suffix == ".whl":
+            if _wheel_provides_extra(path, extra):
+                return True
+        elif _sdist_provides_extra(path, extra):
+            return True
+    return False
+
+
 def _artifact_version(path: Path) -> str | None:
     """Best-effort version from a wheel or sdist filename."""
     if path.suffix == ".whl":
@@ -278,8 +366,20 @@ def pin_specs(
 def large_extra_specs(
     packages: list[str], wheelhouse: Path | None = None
 ) -> list[str]:
-    """Return ``name[large-dependencies]==ver`` specs for pip download/install."""
-    return pin_specs(packages, wheelhouse, extra=LARGE_EXTRA)
+    """Return ``name[large-dependencies]==ver`` for dists that declare the extra.
+
+    Requires ``wheelhouse`` artifacts so metadata can be read (``Provides-Extra``
+    on wheels / PKG-INFO, or ``optional-dependencies`` in sdist pyproject).
+    Without a wheelhouse, returns an empty list.
+    """
+    if wheelhouse is None:
+        return []
+    handlers = [
+        name.strip()
+        for name in packages
+        if name.strip() and dist_provides_extra(wheelhouse, name.strip(), LARGE_EXTRA)
+    ]
+    return pin_specs(handlers, wheelhouse, extra=LARGE_EXTRA)
 
 
 def download_deps(
@@ -318,6 +418,7 @@ def download_deps(
         str(wheelhouse),
         "--find-links",
         str(wheelhouse),
+        "--pre",
         "--platform",
         platform,
         "--python-version",

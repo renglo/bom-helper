@@ -238,8 +238,10 @@ def handlers_python_packages(data: dict[str, Any]) -> tuple[list[str], list[str]
     Both lists are the same ordered pin set: ``renglo-lib`` first (when present),
     then other ``renglo-*``, then extension dists. Prepare puts all of them in the
     wheelhouse; ``run.py build --packages`` installs that full list (no git clone
-    of ``dev/renglo-lib``). ``install_large_extras`` skips ``renglo-*`` for the
-    ``[large-dependencies]`` step.
+    of ``dev/renglo-lib``). The ECS large step only installs
+    ``[large-dependencies]`` for dists whose wheelhouse metadata declares that
+    extra (see ``prepare_handlers_wheelhouse.large_extra_specs`` /
+    ``install_large_extras``).
     """
     all_pins = list(package_pins(data, "python"))
 
@@ -432,8 +434,6 @@ def output_var_name(repo_key: str) -> str:
         "renglo/pes": "pes_ref",
         "renglo/console": "console_ref",
         "renglo/extensions-service": "extensions_service_ref",
-        "Arbitium/arbitiumlab": "arbitiumlab_ref",
-        "Arbitium/arbitiumtriage": "arbitiumtriage_ref",
     }
     if repo_key in legacy:
         return legacy[repo_key]
