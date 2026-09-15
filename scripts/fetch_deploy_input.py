@@ -11,37 +11,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-# Keys never merged into Lambda runtime from deploy input.
-CI_ONLY_ENV_PREFIXES = ("CODEDEPLOY_", "AWS_GITHUB_", "AWS_ECR_")
-CI_ONLY_ENV_KEYS = frozenset(
-    {
-        "AWS_ECR_REPOSITORY",
-        "LAMBDA_BACKEND_ARN",
-        "AWS_GITHUB_OIDC_ROLE_ARN",
-    }
-)
-RESERVED_LAMBDA_ENV_KEYS = frozenset(
-    {
-        "AWS_REGION",
-        "AWS_DEFAULT_REGION",
-        "AWS_EXECUTION_ENV",
-        "AWS_ACCESS_KEY_ID",
-        "AWS_SECRET_ACCESS_KEY",
-        "AWS_SESSION_TOKEN",
-    }
-)
-
-
-def _is_reserved_env_key(key: str) -> bool:
-    k = key.strip()
-    if not k or k in RESERVED_LAMBDA_ENV_KEYS or k in CI_ONLY_ENV_KEYS:
-        return True
-    if k.startswith("AWS_LAMBDA_"):
-        return True
-    for prefix in CI_ONLY_ENV_PREFIXES:
-        if k.startswith(prefix):
-            return True
-    return False
+from lambda_env import filter_lambda_env
 
 
 def _fetch_ssm_value(name: str, region: str) -> str:
@@ -171,7 +141,7 @@ def _runtime_env(payload: dict[str, Any], stage: str = "") -> dict[str, str]:
     elif not stage and "SYS_ENV" not in merged and merged.get("ENVIRONMENT"):
         merged["SYS_ENV"] = merged["ENVIRONMENT"]
 
-    return {k: v for k, v in merged.items() if not _is_reserved_env_key(k)}
+    return filter_lambda_env(merged)
 
 
 def main() -> int:
