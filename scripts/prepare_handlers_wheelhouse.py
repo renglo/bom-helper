@@ -213,6 +213,8 @@ def extract_assets(wheelhouse: Path, assets_dir: Path, packages: list[str]) -> N
 
 
 LARGE_EXTRA = "large-dependencies"
+# Public index when CodeArtifact does not mirror transitive wheels (boto3, numpy, …).
+PYPI_SIMPLE = "https://pypi.org/simple"
 
 
 def _provides_extra_from_metadata_text(text: str, extra: str) -> bool:
@@ -396,11 +398,12 @@ def download_deps(
     Defaults to Lambda's linux/amd64 tags so a Windows host does not poison the
     wheelhouse with win_amd64 wheels.
 
-    When ``strict`` is True (used for ``--with-large-deps``), any pip failure
-    raises instead of warning and continuing with an incomplete wheelhouse.
+    When ``strict`` is True (handlers prepare always uses this for base and
+    ``--with-large-deps``), any pip failure raises instead of warning and
+    continuing with an incomplete wheelhouse.
 
     ``extra_index_urls`` (e.g. PyPI) helps when CodeArtifact does not mirror
-    heavy public wheels like recent numpy/tensorflow.
+    public wheels (boto3, numpy/tensorflow, …).
     """
     if not packages:
         return
@@ -508,7 +511,14 @@ def prepare(
         raise ValueError("no packages to prepare; pass --from-monorepo and/or --packages")
 
     if not skip_deps:
-        download_deps(wheelhouse, pin_specs(ordered, wheelhouse))
+        # Offline Docker install needs a complete house; soft-fail left CI green
+        # until ``pip install --no-index`` blew up (e.g. missing boto3 from renglo-lib).
+        download_deps(
+            wheelhouse,
+            pin_specs(ordered, wheelhouse),
+            strict=True,
+            extra_index_urls=[PYPI_SIMPLE],
+        )
         if with_large_deps:
             extras = large_extra_specs(ordered, wheelhouse)
             print(f"pip download [{LARGE_EXTRA}] for: {', '.join(extras)}")
@@ -517,7 +527,7 @@ def prepare(
                 wheelhouse,
                 extras,
                 strict=True,
-                extra_index_urls=["https://pypi.org/simple"],
+                extra_index_urls=[PYPI_SIMPLE],
             )
 
     extract_assets(wheelhouse, assets_dir, ordered)

@@ -223,7 +223,13 @@ class PrepareAssetsTest(unittest.TestCase):
             calls: list[tuple] = []
 
             def fake_download(_wh, packages, **kwargs):
-                calls.append((list(packages), kwargs.get("strict", False)))
+                calls.append(
+                    (
+                        list(packages),
+                        kwargs.get("strict", False),
+                        kwargs.get("extra_index_urls"),
+                    )
+                )
 
             with mock.patch(
                 "prepare_handlers_wheelhouse.download_deps", side_effect=fake_download
@@ -237,13 +243,14 @@ class PrepareAssetsTest(unittest.TestCase):
                     with_large_deps=True,
                 )
             self.assertEqual(ordered, ["arbitium-lab", "arbitium-triage"])
+            pypi = ["https://pypi.org/simple"]
             self.assertEqual(
                 calls[0],
-                (["arbitium-lab==0.0.1", "arbitium-triage==0.0.1"], False),
+                (["arbitium-lab==0.0.1", "arbitium-triage==0.0.1"], True, pypi),
             )
             self.assertEqual(
                 calls[1],
-                (["arbitium-lab[large-dependencies]==0.0.1"], True),
+                (["arbitium-lab[large-dependencies]==0.0.1"], True, pypi),
             )
 
 
