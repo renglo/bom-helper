@@ -273,6 +273,35 @@ class BomManifestV2Tests(unittest.TestCase):
         self.assertEqual(outputs["has_npm_pins"], "false")
         self.assertEqual(outputs["npm_specs"], "")
 
+    def test_handlers_python_packages_orders_renglo_lib_first(self) -> None:
+        path = _write(
+            Path(self._tmp("handlers-pins.json")),
+            {
+                "version": "v0.1.3",
+                "python": {
+                    "arbitium-lab": "0.0.6rc2",
+                    "renglo-gro": "0.0.4rc1",
+                    "renglo-lib": "0.0.4rc1",
+                    "arbitium-triage": "0.0.6rc2",
+                },
+                "repos": {
+                    "renglo/renglo-lib": {"commit": "abc"},
+                    "renglo/extensions-service": {"commit": "def"},
+                },
+            },
+        )
+        data = load_bom(path)
+        all_pins, install = handlers_python_packages(data)
+        self.assertEqual(install[0], "renglo-lib")
+        self.assertEqual(set(install), set(all_pins))
+        self.assertIn("arbitium-lab", install)
+        specs = resolve_specs(path, data)
+        handlers = checkout_specs(specs, "handlers", data)
+        self.assertEqual([s.key for s in handlers], ["renglo/extensions-service"])
+        skipped = repos_skipped_by_pins(data, "handlers")
+        self.assertIn("renglo/renglo-lib", skipped)
+        self.assertIn("renglo/gro", skipped)  # python.renglo-gro pin
+
     def test_local_npm_install_paths_skips_console_and_extensions(self) -> None:
         dest = Path(self._tmp("dest"))
         (dest / "console").mkdir(parents=True)

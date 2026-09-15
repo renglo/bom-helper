@@ -11,7 +11,7 @@ the matching pipeline.
 Layout and pipeline membership come from conventions (overrideable per repo):
 
   renglo/renglo-api            -> dev/renglo-api            (backend)
-  renglo/renglo-lib            -> dev/renglo-lib            (backend, handlers)
+  renglo/renglo-lib            -> dev/renglo-lib            (backend; handlers)
   renglo/console               -> console                   (console)
   renglo/extensions-service    -> dev/extensions-service    (handlers)
   org/wl | org/<tenant>-wl     -> <repo shortname>          (console)
@@ -41,7 +41,8 @@ DEFAULT_BRANCH = "main"
 
 CORE_REPOS: dict[str, tuple[str, frozenset[str]]] = {
     "renglo/renglo-api": ("dev/renglo-api", frozenset({"backend"})),
-    "renglo/renglo-lib": ("dev/renglo-lib", frozenset({"backend", "handlers"})),
+    # Backend may still clone when unpinned; handlers always consume the python pin.
+    "renglo/renglo-lib": ("dev/renglo-lib", frozenset({"backend"})),
     "renglo/console": ("console", frozenset({"console"})),
     "renglo/extensions-service": ("dev/extensions-service", frozenset({"handlers"})),
 }
@@ -234,18 +235,29 @@ def python_handlers_handles(data: dict[str, Any]) -> list[str]:
 
 
 def handlers_python_packages(data: dict[str, Any]) -> tuple[list[str], list[str]]:
-    """Return (all python pins, handler install pins).
+    """Return (all python pins, image install pins).
 
-    Handler install pins omit ``renglo-*`` (those are deps / core, not ``--packages``
-    image modules). All pins belong in the prepare wheelhouse.
+    Install pins keep ``renglo-lib`` first (when present), then other ``renglo-*``,
+    then extension dists. White-label packs (``*-wl``) stay in the wheelhouse list
+    but are omitted from ``--packages``. Prepare puts all pins in the wheelhouse;
+    ``run.py build --packages`` installs that ordered list (no git clone of
+    ``dev/renglo-lib``). ``install_large_extras`` skips ``renglo-*`` for the
+    ``[large-dependencies]`` step.
     """
     all_pins = list(package_pins(data, "python"))
-    handlers = [
-        p
-        for p in all_pins
-        if not p.startswith("renglo-") and not is_wl_repo_name(p)
-    ]
-    return all_pins, handlers
+
+    def _install_key(name: str) -> tuple[int, str]:
+        if name == "renglo-lib":
+            return (0, name)
+        if name.startswith("renglo-"):
+            return (1, name)
+        return (2, name)
+
+    install = sorted(
+        (p for p in all_pins if not is_wl_repo_name(p)),
+        key=_install_key,
+    )
+    return all_pins, install
 
 
 def npm_wl_package(data: dict[str, Any]) -> str:
@@ -304,7 +316,7 @@ def local_npm_install_paths(dest_root: Path, checkout: list[RepoSpec]) -> list[s
 def repos_skipped_by_pins(data: dict[str, Any], pipeline: str) -> set[str]:
     """Repo keys that a package pin replaces for this pipeline."""
     skipped: set[str] = set()
-    if pipeline == "backend":
+    if pipeline in ("backend", "handlers"):
         for name in package_pins(data, "python"):
             repo = python_package_to_repo(name)
             if repo:
