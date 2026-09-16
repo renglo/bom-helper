@@ -9,7 +9,7 @@ Produces::
       handlers_config.json
       extras/<dist>/handlers_config.json
 
-Local monorepo::
+Local monorepo (Linux)::
 
     python scripts/prepare_handlers_wheelhouse.py \\
       --from-monorepo extensions/arbitium/package,extensions/arbitiumtriage/package \\
@@ -388,30 +388,24 @@ def download_deps(
     wheelhouse: Path,
     packages: list[str],
     *,
-    platform: str = "manylinux2014_x86_64",
-    python_version: str = "3.12",
     strict: bool = False,
     extra_index_urls: list[str] | None = None,
 ) -> None:
     """Download transitive deps into wheelhouse so Docker can use --no-index.
 
-    Defaults to Lambda's linux/amd64 tags so a Windows host does not poison the
-    wheelhouse with win_amd64 wheels.
+    Matches backend CI: plain ``pip download`` (wheels *and* sdists). No
+    ``--only-binary`` / ``--platform`` — those blocked pure-Python sdists such as
+    Flask-Cognito and were only needed to keep Windows hosts from poisoning the
+    house (that path moves to renglo-ci).
 
-    When ``strict`` is True (handlers prepare always uses this for base and
-    ``--with-large-deps``), any pip failure raises instead of warning and
-    continuing with an incomplete wheelhouse.
+    When ``strict`` is True (handlers prepare always), any pip failure raises.
 
     ``extra_index_urls`` (e.g. PyPI) helps when CodeArtifact does not mirror
-    public wheels (boto3, numpy/tensorflow, …).
+    public packages (boto3, Flask-Cognito, numpy/tensorflow, …).
     """
     if not packages:
         return
-    print(
-        f"pip download deps for: {', '.join(packages)} "
-        f"(platform={platform}, python={python_version})"
-    )
-    abi = f"cp{python_version.replace('.', '')}"
+    print(f"pip download deps for: {', '.join(packages)}")
     base = [
         sys.executable,
         "-m",
@@ -422,15 +416,6 @@ def download_deps(
         "--find-links",
         str(wheelhouse),
         "--pre",
-        "--platform",
-        platform,
-        "--python-version",
-        python_version,
-        "--implementation",
-        "cp",
-        "--abi",
-        abi,
-        "--only-binary=:all:",
     ]
     for url in extra_index_urls or []:
         base.extend(["--extra-index-url", url])
