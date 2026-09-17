@@ -12,14 +12,14 @@ Produces::
 Local monorepo::
 
     python scripts/prepare_handlers_wheelhouse.py \\
-      --from-monorepo extensions/arbitium/package,extensions/arbitiumtriage/package \\
+      --from-monorepo extensions/acmewidget/package,extensions/acmeextra/package \\
       --out .handlers-build
 
 Pre-downloaded artifacts (CI)::
 
     python scripts/prepare_handlers_wheelhouse.py \\
       --from-artifacts /tmp/wheels \\
-      --packages arbitium-lab,arbitium-triage \\
+      --packages acme-widget,acme-extra \\
       --out .handlers-build
 
 ECS / large image (same wheelhouse, plus [large-dependencies] wheels)::
@@ -164,6 +164,23 @@ def _preferred_sdist(wheelhouse: Path, dist_name: str) -> Path | None:
     return sdists[0] if sdists else None
 
 
+def _merge_handlers_configs(primary_path: Path, extra_paths: list[Path]) -> None:
+    """Merge handlers + ecs_handlers from extra configs into the primary file."""
+    merged = json.loads(primary_path.read_text(encoding="utf-8"))
+    handlers = dict(merged.get("handlers") or {})
+    ecs_handlers: list[str] = list(merged.get("ecs_handlers") or [])
+    for extra_path in extra_paths:
+        extra = json.loads(extra_path.read_text(encoding="utf-8"))
+        handlers.update(extra.get("handlers") or {})
+        for name in extra.get("ecs_handlers") or []:
+            if name not in ecs_handlers:
+                ecs_handlers.append(name)
+    merged["handlers"] = handlers
+    if ecs_handlers:
+        merged["ecs_handlers"] = ecs_handlers
+    primary_path.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
+
+
 def extract_assets(wheelhouse: Path, assets_dir: Path, packages: list[str]) -> None:
     """Pull lambda_router.py / handlers_config.json from sdists into assets_dir."""
     if assets_dir.exists():
@@ -172,6 +189,7 @@ def extract_assets(wheelhouse: Path, assets_dir: Path, packages: list[str]) -> N
     extras = assets_dir / "extras"
     primary_router_set = False
     primary_config_set = False
+    extra_config_paths: list[Path] = []
 
     for dist_name in packages:
         sdist = _preferred_sdist(wheelhouse, dist_name)
@@ -199,8 +217,17 @@ def extract_assets(wheelhouse: Path, assets_dir: Path, packages: list[str]) -> N
                 else:
                     dest = extras / norm
                     dest.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(config, dest / "handlers_config.json")
+                    extra_config = dest / "handlers_config.json"
+                    shutil.copy2(config, extra_config)
+                    extra_config_paths.append(extra_config)
                     print(f"  extra handlers_config.json -> extras/{norm}/")
+
+    primary_config = assets_dir / "handlers_config.json"
+    if extra_config_paths:
+        _merge_handlers_configs(primary_config, extra_config_paths)
+        print(
+            f"  merged handlers_config.json from {1 + len(extra_config_paths)} packages"
+        )
 
     if not (assets_dir / "lambda_router.py").is_file():
         raise RuntimeError(

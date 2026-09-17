@@ -1,0 +1,494 @@
+{
+  "/arbitium0813-peer-lab": [
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Custom::S3AutoDeleteObjectsCustomResourceProvider": [
+    {
+      "type": "aws:cdk:is-custom-resource-handler-customResourceProvider",
+      "data": true
+    }
+  ],
+  "/arbitium0813-peer-lab/BootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "BootstrapVersion"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/CheckBootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CheckBootstrapVersion"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/HandlersCluster": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeHandlersClusterEB381FFE"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/HandlersLambda": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeHandlersLambda8EEE3466"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/HandlersEcrRepoName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeHandlersEcrRepoName0F256C32"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/HandlersEcrRepoUri": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeHandlersEcrRepoUri0158104D"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/HandlersEcsClusterName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeHandlersEcsClusterName32CDBAD3"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/HandlersResultsBucketName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeHandlersResultsBucketNameB7647493"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/HandlersExecutionRoleArn": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeHandlersExecutionRoleArn2AC24183"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/HandlersTaskRoleArn": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeHandlersTaskRoleArn8EDDF030"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/HandlersLambdaRoleArn": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeHandlersLambdaRoleArn833C3628"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/HandlersLambdaLogGroupName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeHandlersLambdaLogGroupName769FA731"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/HandlersLambdaFunctionName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeHandlersLambdaFunctionName3250848C"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/HandlersTaskFamily": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeHandlersTaskFamilyD73E0C2C"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/HandlersOidcDeployRoleArnProduction": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeHandlersOidcDeployRoleArnProduction186D5802"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/HandlersOidcDeployRoleArnStaging": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeHandlersOidcDeployRoleArnStaging4E9BCB72"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Custom::S3AutoDeleteObjectsCustomResourceProvider/Role": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Custom::S3AutoDeleteObjectsCustomResourceProvider/Handler": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/CDKMetadata/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CDKMetadata"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/ResultsBucket/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeResultsBucketA384D716"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    },
+    {
+      "type": "aws:cdk:analytics:mixin",
+      "data": {
+        "mixin": "aws-cdk-lib.aws_s3.mixins.BucketAutoDeleteObjects"
+      }
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/HandlersEcrRepo/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeHandlersEcrRepoC8A63E25"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/EcsExecutionRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeEcsExecutionRole862D9DBF"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/EcsTaskRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeEcsTaskRole82DE5989"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/HandlersPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeHandlersPolicyA9144691"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/EcsTaskRoleInlinePolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeEcsTaskRoleInlinePolicy531A6403"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/HandlersLambdaRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeHandlersLambdaRole7EA2F2BD"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/HandlersLambdaLogGroup/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeHandlersLambdaLogGroupB03E2C66"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/HandlersLogGroup/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeHandlersLogGroup55B4EDE9"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/HandlersTaskDef/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeHandlersTaskDef4A608F16"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/HandlersTaskDef/handler": [
+    {
+      "type": "aws:cdk:warning",
+      "data": "Proper policies need to be attached before pulling from ECR repository, or use 'fromEcrRepository'. [ack: @aws-cdk/aws-ecs:ecrImageRequiresPolicy]",
+      "trace": [
+        "Annotations.addMessage (/var/folders/p3/vm8fr2xn2wb33xggc2qk0xn40000gn/T/jsii-kernel-go91tE/node_modules/aws-cdk-lib/core/lib/annotations.js:1:3506)",
+        "Annotations.addWarningV2 (/var/folders/p3/vm8fr2xn2wb33xggc2qk0xn40000gn/T/jsii-kernel-go91tE/node_modules/aws-cdk-lib/core/lib/annotations.js:1:2194)",
+        "RepositoryImage.bind (/var/folders/p3/vm8fr2xn2wb33xggc2qk0xn40000gn/T/jsii-kernel-go91tE/node_modules/aws-cdk-lib/aws-ecs/lib/images/repository.js:1:1404)",
+        "new ContainerDefinition2 (/var/folders/p3/vm8fr2xn2wb33xggc2qk0xn40000gn/T/jsii-kernel-go91tE/node_modules/aws-cdk-lib/aws-ecs/lib/container-definition.js:1:8044)",
+        "new ContainerDefinition2 (/var/folders/p3/vm8fr2xn2wb33xggc2qk0xn40000gn/T/jsii-kernel-go91tE/node_modules/aws-cdk-lib/core/lib/no-box-stack-traces.js:1:345)",
+        "new ContainerDefinition2 (/var/folders/p3/vm8fr2xn2wb33xggc2qk0xn40000gn/T/jsii-kernel-go91tE/node_modules/aws-cdk-lib/core/lib/prop-injectable.js:1:855)",
+        "WrappedClass.addContainer (/var/folders/p3/vm8fr2xn2wb33xggc2qk0xn40000gn/T/jsii-kernel-go91tE/node_modules/aws-cdk-lib/aws-ecs/lib/base/task-definition.js:1:20736)",
+        "WrappedClass.<anonymous> (/var/folders/p3/vm8fr2xn2wb33xggc2qk0xn40000gn/T/jsii-kernel-go91tE/node_modules/aws-cdk-lib/core/lib/metadata-resource.js:1:2059)",
+        "/private/var/folders/p3/vm8fr2xn2wb33xggc2qk0xn40000gn/T/tmpvs2x0har/lib/program.js:1:55656",
+        "Kernel._Kernel_ensureSync (/private/var/folders/p3/vm8fr2xn2wb33xggc2qk0xn40000gn/T/tmpvs2x0har/lib/program.js:1:71277)",
+        "Kernel.invoke (/private/var/folders/p3/vm8fr2xn2wb33xggc2qk0xn40000gn/T/tmpvs2x0har/lib/program.js:1:55601)",
+        "KernelHost.processRequest (/private/var/folders/p3/vm8fr2xn2wb33xggc2qk0xn40000gn/T/tmpvs2x0har/lib/program.js:1:228024)",
+        "KernelHost.run (/private/var/folders/p3/vm8fr2xn2wb33xggc2qk0xn40000gn/T/tmpvs2x0har/lib/program.js:1:227008)",
+        "Immediate._onImmediate (/private/var/folders/p3/vm8fr2xn2wb33xggc2qk0xn40000gn/T/tmpvs2x0har/lib/program.js:1:227052)",
+        "process.processImmediate (node:internal/timers:505:21)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/HandlersOidcDeployRoleProduction/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeHandlersOidcDeployRoleProduction05C7B835"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/HandlersOidcDeployRoleStaging/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeHandlersOidcDeployRoleStaging7DC6BBBB"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/ResultsBucket/Policy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeResultsBucketPolicy704671F8"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, jsii runtime...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    },
+    {
+      "type": "aws:cdk:analytics:mixin",
+      "data": {
+        "mixin": "aws-cdk-lib.aws_s3.mixins.BucketPolicyStatements"
+      }
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/ResultsBucket/AutoDeleteObjectsCustomResource/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeResultsBucketAutoDeleteObjectsCustomResource791A9BBD"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/arbitium0813-peer-lab/Compute/EcsExecutionRole/DefaultPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ComputeEcsExecutionRoleDefaultPolicy85969266"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ]
+}

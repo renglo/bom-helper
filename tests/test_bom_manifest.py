@@ -181,17 +181,17 @@ class BomManifestV2Tests(unittest.TestCase):
                 "python": {
                     "renglo-lib": "0.0.3",
                     "renglo-api": "0.0.5",
-                    "arbitium-lab": "0.0.4",
-                    "arbitium-wl": "0.0.2",
+                    "acme-lab": "0.0.4",
+                    "acme-wl": "0.0.2",
                 },
             },
         )
         data = load_bom(path)
         _all, handlers = handlers_python_packages(data)
-        self.assertIn("arbitium-wl", _all)
-        self.assertNotIn("arbitium-wl", handlers)
-        self.assertNotIn("arbitium-wl", python_handlers_handles(data))
-        self.assertIn("arbitium-lab", handlers)
+        self.assertIn("acme-wl", _all)
+        self.assertNotIn("acme-wl", handlers)
+        self.assertNotIn("acme-wl", python_handlers_handles(data))
+        self.assertIn("acme-lab", handlers)
 
     def test_wl_npm_pin_skips_matching_clone(self) -> None:
         path = _write(
@@ -279,10 +279,10 @@ class BomManifestV2Tests(unittest.TestCase):
             {
                 "version": "v0.1.3",
                 "python": {
-                    "arbitium-lab": "0.0.6rc2",
+                    "acme-lab": "0.0.6rc2",
                     "renglo-gro": "0.0.4rc1",
                     "renglo-lib": "0.0.4rc1",
-                    "arbitium-triage": "0.0.6rc2",
+                    "acme-triage": "0.0.6rc2",
                 },
                 "repos": {
                     "renglo/renglo-lib": {"commit": "abc"},
@@ -294,7 +294,7 @@ class BomManifestV2Tests(unittest.TestCase):
         all_pins, install = handlers_python_packages(data)
         self.assertEqual(install[0], "renglo-lib")
         self.assertEqual(set(install), set(all_pins))
-        self.assertIn("arbitium-lab", install)
+        self.assertIn("acme-lab", install)
         specs = resolve_specs(path, data)
         handlers = checkout_specs(specs, "handlers", data)
         self.assertEqual([s.key for s in handlers], ["renglo/extensions-service"])

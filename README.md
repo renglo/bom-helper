@@ -2,18 +2,20 @@
 
 Shared deploy runtime for every tenant `*-bom` repository (example-bom, apollo-bom, …).
 
-Tenant BOM repos keep **pins only** (`bom/`, `handlers_bom/`, `deploy_targets.yml`).
-This repo owns the scripts, Dockerfile, and the GitHub Action that wires them into CI.
+Tenant BOM repos keep **pins + placement** (`bom/` hub, `console_bom/`, `peers_bom/` per peer, `deploy_targets.yml` `hub:` / `peers:`).
+This repo owns the scripts, Dockerfile, **peer CDK/packager**, and the GitHub Action that wires them into CI.
+
+Peer vocabulary, add-peer, grouping, and MCP: [docs/PEERS.md](docs/PEERS.md).
+Overflow teardown after smoke: [docs/OVERFLOW_TEARDOWN.md](docs/OVERFLOW_TEARDOWN.md).
 
 ## What stays where
 
 | Repo | Contents |
 |------|----------|
-| **`*-bom`** | `bom/*.json`, `handlers_bom/*.json`, `deploy_targets.yml`, thin workflows |
-| **`bom-helper`** | `scripts/`, `tests/`, `Dockerfile`, `.github/actions/use-helper` |
+| **`*-bom`** | `bom/` (hub), `console_bom/`, `peers_bom/<peerId>/`, `handlers_bom/` (overflow), `deploy_targets.yml` |
+| **`bom-helper`** | `scripts/` (`generate_bom.py`, `bom_layout.py`), `cdk/`, `tests/`, `Dockerfile` |
 
-`git convoy adopt --bom ops/<system>-bom` is unchanged: it still only edits pins and
-`deploy_targets.yml`. You commit and push the `*-bom` repo; CI deploys.
+`git convoy adopt --bom ops/<system>-bom` fills pins from the train and writes **three BOM trees** (hub, console, peers) from `deploy_targets.yml` placement. Regenerate manually with `python scripts/generate_bom.py ../<tenant>-bom --version X.Y.Z`.
 
 ## Pin from a tenant BOM
 
@@ -42,7 +44,7 @@ repos cannot be loaded with `uses: renglo/bom-helper/...` — GitHub reports
 ```
 
 That action reads `helper.*`, clones this repo into `.bom-helper/`, and
-**copies** `scripts/` + `Dockerfile` into the workspace (not symlinks — Docker
+**copies** `scripts/` + `cdk/` + `Dockerfile` into the workspace (not symlinks — Docker
 BuildKit cannot reliably `COPY` through directory symlinks).
 
 If the clone step fails on a private org repo, grant the `*-bom` workflow
@@ -60,6 +62,26 @@ From a workspace where this checkout sits next to the tenant BOM:
 cd ops/example-bom
 python3 ../bom-helper/scripts/bom_manifest.py --plan --pipeline backend bom/v0.1.10.json
 ```
+
+### Peer CDK (first-time stack provision)
+
+Peer stacks are **not** deployed by `deploy_peers.yml` CI — that workflow publishes zip/ECS
+artifacts into stacks that already exist. One-time (or compute-shape) CDK uses a local venv,
+same pattern as bootstrap and publisher:
+
+```bash
+cd ops/bom-helper
+bash setup-venv.sh
+
+export ENV=<env_id>
+export AWS_PROFILE=<aws_profile>
+export PEER_ID=<peer_id>
+
+bash scripts/deploy_peer_cdk.sh synth --peer-id "$PEER_ID"
+bash scripts/deploy_peer_cdk.sh deploy --peer-id "$PEER_ID"
+```
+
+Requires the **CDK CLI** on your PATH (`npm install -g aws-cdk`). See [docs/PEERS.md](docs/PEERS.md).
 
 Or symlink once:
 

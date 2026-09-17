@@ -77,8 +77,16 @@ runs:
         rm -rf scripts
         mkdir -p scripts
         cp -a "${HELPER}/scripts/." scripts/
+        if [[ -d "${HELPER}/cdk" ]]; then
+          rm -rf cdk
+          mkdir -p cdk
+          cp -a "${HELPER}/cdk/." cdk/
+        fi
         cp "${HELPER}/Dockerfile" Dockerfile
         chmod +x scripts/deploy_amplify_console.sh
         test -f scripts/stage_extension_blueprints.py
         test -f scripts/install_backend_packages.py
+        test -f scripts/prepare_handlers_wheelhouse.py
+        test -f scripts/peers.py
+        test -f scripts/peer_packager.py
         echo "Using bom-helper ${{ steps.pin.outputs.repository }}@${{ steps.pin.outputs.ref }}"

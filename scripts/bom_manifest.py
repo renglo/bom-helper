@@ -18,7 +18,7 @@ Layout and pipeline membership come from conventions (overrideable per repo):
   any other org/name           -> extensions/<name>
 
 Unknown repos in bom/*.json default to backend+console.
-Unknown repos in handlers_bom/*.json default to handlers.
+Unknown repos in handlers_bom/*.json or peers_bom/**/*.json default to handlers.
 
 Optional per-repo JSON fields:
   path        Checkout directory relative to the workspace root
@@ -113,8 +113,10 @@ def default_pipelines(repo_key: str, source: str) -> frozenset[str]:
 
 
 def infer_source(bom_file: Path, data: dict[str, Any]) -> str:
-    parent = bom_file.resolve().parent.name
-    if parent == "handlers_bom" or str(data.get("deploy_stage", "")).strip():
+    parts = {p.lower() for p in bom_file.resolve().parts}
+    if "console_bom" in parts:
+        return "console"
+    if "handlers_bom" in parts or "peers_bom" in parts or str(data.get("deploy_stage", "")).strip():
         return "handlers"
     return "bom"
 
@@ -427,26 +429,6 @@ def handlers_build_flags(
     return handles[0], ",".join(handles[1:])
 
 
-def output_var_name(repo_key: str) -> str:
-    """GITHUB_OUTPUT name for a repo ref (legacy resolve_refs.py names preserved)."""
-    legacy = {
-        "renglo/renglo-api": "renglo_api_ref",
-        "renglo/renglo-lib": "renglo_lib_ref",
-        "renglo/data": "data_ref",
-        "renglo/schd": "schd_ref",
-        "renglo/gro": "gro_ref",
-        "renglo/pes": "pes_ref",
-        "renglo/console": "console_ref",
-        "renglo/extensions-service": "extensions_service_ref",
-        "Arbitium/arbitiumlab": "arbitiumlab_ref",
-        "Arbitium/arbitiumtriage": "arbitiumtriage_ref",
-    }
-    if repo_key in legacy:
-        return legacy[repo_key]
-    slug = re.sub(r"[^a-z0-9]+", "_", repo_key.lower()).strip("_")
-    return f"{slug}_ref"
-
-
 def scan_vite_extensions(root: Path, specs: list[RepoSpec]) -> list[str]:
     """Extension shortnames that have a console ui/ directory after checkout."""
     found: list[str] = []
@@ -525,7 +507,7 @@ def ci_outputs(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Plan or validate a BOM JSON")
-    parser.add_argument("bom_file", help="Path to bom/vX.Y.Z.json or handlers_bom/vX.Y.Z.json")
+    parser.add_argument("bom_file", help="Path to bom/vX.Y.Z.json, handlers_bom/vX.Y.Z.json, or peers_bom/<id>/vX.Y.Z.json")
     parser.add_argument(
         "--pipeline",
         choices=VALID_PIPELINES,

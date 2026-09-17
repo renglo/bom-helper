@@ -1,0 +1,1079 @@
+{
+ "Resources": {
+  "ComputeResultsBucketA384D716": {
+   "Type": "AWS::S3::Bucket",
+   "Properties": {
+    "BucketEncryption": {
+     "ServerSideEncryptionConfiguration": [
+      {
+       "ServerSideEncryptionByDefault": {
+        "SSEAlgorithm": "AES256"
+       }
+      }
+     ]
+    },
+    "BucketName": "arbitium0813-peer-lab-ecs-982081058012",
+    "LifecycleConfiguration": {
+     "Rules": [
+      {
+       "ExpirationInDays": 1,
+       "Id": "ExpirePayloadsResults",
+       "Prefix": "payloads/",
+       "Status": "Enabled"
+      },
+      {
+       "ExpirationInDays": 1,
+       "Id": "ExpireResultsPrefix",
+       "Prefix": "results/",
+       "Status": "Enabled"
+      },
+      {
+       "ExpirationInDays": 1,
+       "Id": "ExpireStatusPrefix",
+       "Prefix": "status/",
+       "Status": "Enabled"
+      }
+     ]
+    },
+    "PublicAccessBlockConfiguration": {
+     "BlockPublicAcls": true,
+     "BlockPublicPolicy": true,
+     "IgnorePublicAcls": true,
+     "RestrictPublicBuckets": true
+    },
+    "Tags": [
+     {
+      "Key": "aws-cdk:auto-delete-objects",
+      "Value": "true"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "arbitium0813-peer-lab/Compute/ResultsBucket/Resource"
+   }
+  },
+  "ComputeResultsBucketPolicy704671F8": {
+   "Type": "AWS::S3::BucketPolicy",
+   "Properties": {
+    "Bucket": {
+     "Ref": "ComputeResultsBucketA384D716"
+    },
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "s3:DeleteObject*",
+        "s3:GetBucket*",
+        "s3:List*",
+        "s3:PutBucketPolicy"
+       ],
+       "Effect": "Allow",
+       "Principal": {
+        "AWS": {
+         "Fn::GetAtt": [
+          "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+          "Arn"
+         ]
+        }
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ComputeResultsBucketA384D716",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ComputeResultsBucketA384D716",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "arbitium0813-peer-lab/Compute/ResultsBucket/Policy/Resource"
+   }
+  },
+  "ComputeResultsBucketAutoDeleteObjectsCustomResource791A9BBD": {
+   "Type": "Custom::S3AutoDeleteObjects",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
+      "Arn"
+     ]
+    },
+    "BucketName": {
+     "Ref": "ComputeResultsBucketA384D716"
+    }
+   },
+   "DependsOn": [
+    "ComputeResultsBucketPolicy704671F8"
+   ],
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "arbitium0813-peer-lab/Compute/ResultsBucket/AutoDeleteObjectsCustomResource/Default"
+   }
+  },
+  "ComputeHandlersEcrRepoC8A63E25": {
+   "Type": "AWS::ECR::Repository",
+   "Properties": {
+    "LifecyclePolicy": {
+     "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":10},\"action\":{\"type\":\"expire\"}}]}"
+    },
+    "RepositoryName": "arbitium0813-peer-lab-ecs"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "arbitium0813-peer-lab/Compute/HandlersEcrRepo/Resource"
+   }
+  },
+  "ComputeHandlersClusterEB381FFE": {
+   "Type": "AWS::ECS::Cluster",
+   "Properties": {
+    "ClusterName": "arbitium0813-peer-lab"
+   },
+   "Metadata": {
+    "aws:cdk:path": "arbitium0813-peer-lab/Compute/HandlersCluster"
+   }
+  },
+  "ComputeEcsExecutionRole862D9DBF": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "ecs-tasks.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Description": "Reglo Deployment",
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+       ]
+      ]
+     }
+    ],
+    "RoleName": "arbitium0813-peer-lab-ecs-execution"
+   },
+   "Metadata": {
+    "aws:cdk:path": "arbitium0813-peer-lab/Compute/EcsExecutionRole/Resource"
+   }
+  },
+  "ComputeEcsExecutionRoleDefaultPolicy85969266": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "ComputeHandlersLogGroup55B4EDE9",
+         "Arn"
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ComputeEcsExecutionRoleDefaultPolicy85969266",
+    "Roles": [
+     {
+      "Ref": "ComputeEcsExecutionRole862D9DBF"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "arbitium0813-peer-lab/Compute/EcsExecutionRole/DefaultPolicy/Resource"
+   }
+  },
+  "ComputeEcsTaskRole82DE5989": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "ecs-tasks.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Description": "Reglo Deployment",
+    "ManagedPolicyArns": [
+     {
+      "Ref": "ComputeHandlersPolicyA9144691"
+     },
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::982081058012:policy/arbitium0813_tt_policy"
+       ]
+      ]
+     }
+    ],
+    "RoleName": "arbitium0813-peer-lab-ecs-task"
+   },
+   "Metadata": {
+    "aws:cdk:path": "arbitium0813-peer-lab/Compute/EcsTaskRole/Resource"
+   }
+  },
+  "ComputeHandlersPolicyA9144691": {
+   "Type": "AWS::IAM::ManagedPolicy",
+   "Properties": {
+    "Description": "",
+    "ManagedPolicyName": "Arbitium0813-peer-labPolicy",
+    "Path": "/",
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "ecs:DescribeClusters",
+        "ecs:DescribeTasks",
+        "ecs:ListTasks",
+        "ecs:RunTask"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        "arn:aws:ecs:us-east-1:982081058012:cluster/arbitium0813-peer-lab",
+        "arn:aws:ecs:us-east-1:982081058012:task-definition/arbitium0813-peer-lab-ecs:*",
+        "arn:aws:ecs:us-east-1:982081058012:task/arbitium0813-peer-lab/*"
+       ],
+       "Sid": "ECSRunTask"
+      },
+      {
+       "Action": "iam:PassRole",
+       "Condition": {
+        "StringEquals": {
+         "iam:PassedToService": "ecs-tasks.amazonaws.com"
+        }
+       },
+       "Effect": "Allow",
+       "Resource": [
+        "arn:aws:iam::982081058012:role/arbitium0813-peer-lab-ecs-execution",
+        "arn:aws:iam::982081058012:role/arbitium0813-peer-lab-ecs-task"
+       ],
+       "Sid": "ECSPassRole"
+      },
+      {
+       "Action": [
+        "s3:GetObject",
+        "s3:PutObject"
+       ],
+       "Effect": "Allow",
+       "Resource": "arn:aws:s3:::arbitium0813-peer-lab-ecs-982081058012/*",
+       "Sid": "ECSHandshakeS3"
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "arbitium0813-peer-lab/Compute/HandlersPolicy/Resource"
+   }
+  },
+  "ComputeEcsTaskRoleInlinePolicy531A6403": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "s3:GetObject",
+        "s3:PutObject"
+       ],
+       "Effect": "Allow",
+       "Resource": "arn:aws:s3:::arbitium0813-peer-lab-ecs-982081058012/*",
+       "Sid": "ECSHandshakeS3"
+      },
+      {
+       "Action": [
+        "ecs:DescribeClusters",
+        "ecs:DescribeTasks",
+        "ecs:ListTasks",
+        "ecs:RunTask"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        "arn:aws:ecs:us-east-1:982081058012:cluster/arbitium0813-peer-lab",
+        "arn:aws:ecs:us-east-1:982081058012:task-definition/arbitium0813-peer-lab-ecs:*",
+        "arn:aws:ecs:us-east-1:982081058012:task/arbitium0813-peer-lab/*"
+       ],
+       "Sid": "ECSRunTaskChain"
+      },
+      {
+       "Action": "iam:PassRole",
+       "Condition": {
+        "StringEquals": {
+         "iam:PassedToService": "ecs-tasks.amazonaws.com"
+        }
+       },
+       "Effect": "Allow",
+       "Resource": [
+        "arn:aws:iam::982081058012:role/arbitium0813-peer-lab-ecs-execution",
+        "arn:aws:iam::982081058012:role/arbitium0813-peer-lab-ecs-task"
+       ],
+       "Sid": "ECSPassRoleChain"
+      },
+      {
+       "Action": "ecr:GetAuthorizationToken",
+       "Effect": "Allow",
+       "Resource": "*"
+      },
+      {
+       "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer"
+       ],
+       "Effect": "Allow",
+       "Resource": "arn:aws:ecr:us-east-1:982081058012:repository/arbitium0813-peer-lab-ecs"
+      },
+      {
+       "Action": "lambda:InvokeFunction",
+       "Effect": "Allow",
+       "Resource": "arn:aws:lambda:us-east-1:982081058012:function:arbitium0813-peer-lab"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ecs-handlers-s3-ecr",
+    "Roles": [
+     {
+      "Ref": "ComputeEcsTaskRole82DE5989"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "arbitium0813-peer-lab/Compute/EcsTaskRoleInlinePolicy/Resource"
+   }
+  },
+  "ComputeHandlersLambdaRole7EA2F2BD": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Description": "Reglo Deployment",
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     },
+     {
+      "Ref": "ComputeHandlersPolicyA9144691"
+     },
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::982081058012:policy/arbitium0813_tt_policy"
+       ]
+      ]
+     }
+    ],
+    "RoleName": "arbitium0813-peer-lab-role"
+   },
+   "Metadata": {
+    "aws:cdk:path": "arbitium0813-peer-lab/Compute/HandlersLambdaRole/Resource"
+   }
+  },
+  "ComputeHandlersLambdaLogGroupB03E2C66": {
+   "Type": "AWS::Logs::LogGroup",
+   "Properties": {
+    "LogGroupName": "/aws/lambda/arbitium0813-peer-lab",
+    "RetentionInDays": 731
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "arbitium0813-peer-lab/Compute/HandlersLambdaLogGroup/Resource"
+   }
+  },
+  "ComputeHandlersLambda8EEE3466": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "ZipFile": "def handler(event, context):\n    return {'statusCode': 200, 'body': 'seed'}\n"
+    },
+    "Description": "Reglo Deployment",
+    "FunctionName": "arbitium0813-peer-lab",
+    "Handler": "index.handler",
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "ComputeHandlersLambdaRole7EA2F2BD",
+      "Arn"
+     ]
+    },
+    "Runtime": "python3.12",
+    "Timeout": 900
+   },
+   "DependsOn": [
+    "ComputeHandlersLambdaRole7EA2F2BD"
+   ],
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "arbitium0813-peer-lab/Compute/HandlersLambda"
+   }
+  },
+  "ComputeHandlersLogGroup55B4EDE9": {
+   "Type": "AWS::Logs::LogGroup",
+   "Properties": {
+    "LogGroupName": "/ecs/arbitium0813-peer-lab-ecs",
+    "RetentionInDays": 731
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "arbitium0813-peer-lab/Compute/HandlersLogGroup/Resource"
+   }
+  },
+  "ComputeHandlersTaskDef4A608F16": {
+   "Type": "AWS::ECS::TaskDefinition",
+   "Properties": {
+    "ContainerDefinitions": [
+     {
+      "Essential": true,
+      "Image": "982081058012.dkr.ecr.us-east-1.amazonaws.com/arbitium0813-peer-lab-ecs:latest",
+      "LogConfiguration": {
+       "LogDriver": "awslogs",
+       "Options": {
+        "awslogs-group": {
+         "Ref": "ComputeHandlersLogGroup55B4EDE9"
+        },
+        "awslogs-stream-prefix": "ecs",
+        "awslogs-region": "us-east-1"
+       }
+      },
+      "Name": "handler"
+     }
+    ],
+    "Cpu": "1024",
+    "ExecutionRoleArn": {
+     "Fn::GetAtt": [
+      "ComputeEcsExecutionRole862D9DBF",
+      "Arn"
+     ]
+    },
+    "Family": "arbitium0813-peer-lab-ecs",
+    "Memory": "4096",
+    "NetworkMode": "awsvpc",
+    "RequiresCompatibilities": [
+     "FARGATE"
+    ],
+    "TaskRoleArn": {
+     "Fn::GetAtt": [
+      "ComputeEcsTaskRole82DE5989",
+      "Arn"
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "arbitium0813-peer-lab/Compute/HandlersTaskDef/Resource"
+   }
+  },
+  "ComputeHandlersOidcDeployRoleProduction05C7B835": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRoleWithWebIdentity",
+       "Condition": {
+        "StringEquals": {
+         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+        },
+        "StringLike": {
+         "token.actions.githubusercontent.com:sub": [
+          "repo:Arbitium/arbitium-bom:environment:production"
+         ]
+        }
+       },
+       "Effect": "Allow",
+       "Principal": {
+        "Federated": "arn:aws:iam::982081058012:oidc-provider/token.actions.githubusercontent.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Description": "Reglo Deployment",
+    "Policies": [
+     {
+      "PolicyDocument": {
+       "Statement": [
+        {
+         "Action": "sts:GetCallerIdentity",
+         "Effect": "Allow",
+         "Resource": "*",
+         "Sid": "ReadIdentity"
+        },
+        {
+         "Action": "ecr:GetAuthorizationToken",
+         "Effect": "Allow",
+         "Resource": "*",
+         "Sid": "EcrAuthToken"
+        },
+        {
+         "Action": [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:BatchGetImage",
+          "ecr:CompleteLayerUpload",
+          "ecr:DescribeRepositories",
+          "ecr:InitiateLayerUpload",
+          "ecr:PutImage",
+          "ecr:UploadLayerPart"
+         ],
+         "Effect": "Allow",
+         "Resource": "arn:aws:ecr:us-east-1:982081058012:repository/arbitium0813-peer-lab-ecs",
+         "Sid": "EcrPushScoped"
+        },
+        {
+         "Action": [
+          "ecs:DescribeCapacityProviders",
+          "ecs:DescribeClusters",
+          "ecs:DescribeTaskDefinition",
+          "ecs:ListContainerInstances",
+          "ecs:ListTaskDefinitions",
+          "ecs:RegisterTaskDefinition"
+         ],
+         "Effect": "Allow",
+         "Resource": "*",
+         "Sid": "EcsTaskDefinition"
+        },
+        {
+         "Action": [
+          "logs:CreateLogGroup",
+          "logs:DescribeLogGroups",
+          "logs:PutRetentionPolicy"
+         ],
+         "Effect": "Allow",
+         "Resource": "arn:aws:logs:us-east-1:982081058012:log-group:/ecs/arbitium0813-peer-lab-ecs*",
+         "Sid": "LogsHandlers"
+        },
+        {
+         "Action": [
+          "s3:CreateBucket",
+          "s3:DeleteObject",
+          "s3:GetBucketLocation",
+          "s3:GetLifecycleConfiguration",
+          "s3:GetObject",
+          "s3:HeadBucket",
+          "s3:ListBucket",
+          "s3:PutLifecycleConfiguration",
+          "s3:PutObject"
+         ],
+         "Effect": "Allow",
+         "Resource": [
+          "arn:aws:s3:::arbitium0813-peer-lab-ecs-982081058012",
+          "arn:aws:s3:::arbitium0813-peer-lab-ecs-982081058012/*"
+         ],
+         "Sid": "S3ResultsBucket"
+        },
+        {
+         "Action": "iam:PassRole",
+         "Condition": {
+          "StringEquals": {
+           "iam:PassedToService": "ecs-tasks.amazonaws.com"
+          }
+         },
+         "Effect": "Allow",
+         "Resource": [
+          "arn:aws:iam::982081058012:role/arbitium0813-peer-lab-ecs-execution",
+          "arn:aws:iam::982081058012:role/arbitium0813-peer-lab-ecs-task"
+         ],
+         "Sid": "PassEcsRoles"
+        },
+        {
+         "Action": [
+          "lambda:GetFunction",
+          "lambda:GetFunctionConfiguration",
+          "lambda:UpdateFunctionCode",
+          "lambda:UpdateFunctionConfiguration"
+         ],
+         "Effect": "Allow",
+         "Resource": "arn:aws:lambda:us-east-1:982081058012:function:arbitium0813-peer-lab",
+         "Sid": "LambdaHandlersOptional"
+        },
+        {
+         "Action": [
+          "iam:GetRole",
+          "iam:PassRole"
+         ],
+         "Effect": "Allow",
+         "Resource": "arn:aws:iam::982081058012:role/arbitium0813-peer-lab-role"
+        },
+        {
+         "Action": [
+          "ssm:GetParameter",
+          "ssm:GetParameters"
+         ],
+         "Effect": "Allow",
+         "Resource": [
+          "arn:aws:ssm:us-east-1:982081058012:parameter/arbitium0813/bootstrap/deploy-input",
+          "arn:aws:ssm:us-east-1:982081058012:parameter/arbitium0813/bootstrap/ecs-security-groups",
+          "arn:aws:ssm:us-east-1:982081058012:parameter/arbitium0813/bootstrap/ecs-subnets",
+          "arn:aws:ssm:us-east-1:982081058012:parameter/arbitium0813/bootstrap/ecs-vpc"
+         ],
+         "Sid": "SsmReadDeployInput"
+        }
+       ],
+       "Version": "2012-10-17"
+      },
+      "PolicyName": "GitHubActionsHandlersPolicy-arbitium0813-lab-production"
+     }
+    ],
+    "RoleName": "GitHubActionsHandlersRole-arbitium0813-lab-production"
+   },
+   "Metadata": {
+    "aws:cdk:path": "arbitium0813-peer-lab/Compute/HandlersOidcDeployRoleProduction/Resource"
+   }
+  },
+  "ComputeHandlersOidcDeployRoleStaging7DC6BBBB": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRoleWithWebIdentity",
+       "Condition": {
+        "StringEquals": {
+         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+        },
+        "StringLike": {
+         "token.actions.githubusercontent.com:sub": [
+          "repo:Arbitium/arbitium-bom:environment:staging"
+         ]
+        }
+       },
+       "Effect": "Allow",
+       "Principal": {
+        "Federated": "arn:aws:iam::982081058012:oidc-provider/token.actions.githubusercontent.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Description": "Reglo Deployment",
+    "Policies": [
+     {
+      "PolicyDocument": {
+       "Statement": [
+        {
+         "Action": "sts:GetCallerIdentity",
+         "Effect": "Allow",
+         "Resource": "*",
+         "Sid": "ReadIdentity"
+        },
+        {
+         "Action": "ecr:GetAuthorizationToken",
+         "Effect": "Allow",
+         "Resource": "*",
+         "Sid": "EcrAuthToken"
+        },
+        {
+         "Action": [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:BatchGetImage",
+          "ecr:CompleteLayerUpload",
+          "ecr:DescribeRepositories",
+          "ecr:InitiateLayerUpload",
+          "ecr:PutImage",
+          "ecr:UploadLayerPart"
+         ],
+         "Effect": "Allow",
+         "Resource": "arn:aws:ecr:us-east-1:982081058012:repository/arbitium0813-peer-lab-ecs",
+         "Sid": "EcrPushScoped"
+        },
+        {
+         "Action": [
+          "ecs:DescribeCapacityProviders",
+          "ecs:DescribeClusters",
+          "ecs:DescribeTaskDefinition",
+          "ecs:ListContainerInstances",
+          "ecs:ListTaskDefinitions",
+          "ecs:RegisterTaskDefinition"
+         ],
+         "Effect": "Allow",
+         "Resource": "*",
+         "Sid": "EcsTaskDefinition"
+        },
+        {
+         "Action": [
+          "logs:CreateLogGroup",
+          "logs:DescribeLogGroups",
+          "logs:PutRetentionPolicy"
+         ],
+         "Effect": "Allow",
+         "Resource": "arn:aws:logs:us-east-1:982081058012:log-group:/ecs/arbitium0813-peer-lab-ecs*",
+         "Sid": "LogsHandlers"
+        },
+        {
+         "Action": [
+          "s3:CreateBucket",
+          "s3:DeleteObject",
+          "s3:GetBucketLocation",
+          "s3:GetLifecycleConfiguration",
+          "s3:GetObject",
+          "s3:HeadBucket",
+          "s3:ListBucket",
+          "s3:PutLifecycleConfiguration",
+          "s3:PutObject"
+         ],
+         "Effect": "Allow",
+         "Resource": [
+          "arn:aws:s3:::arbitium0813-peer-lab-ecs-982081058012",
+          "arn:aws:s3:::arbitium0813-peer-lab-ecs-982081058012/*"
+         ],
+         "Sid": "S3ResultsBucket"
+        },
+        {
+         "Action": "iam:PassRole",
+         "Condition": {
+          "StringEquals": {
+           "iam:PassedToService": "ecs-tasks.amazonaws.com"
+          }
+         },
+         "Effect": "Allow",
+         "Resource": [
+          "arn:aws:iam::982081058012:role/arbitium0813-peer-lab-ecs-execution",
+          "arn:aws:iam::982081058012:role/arbitium0813-peer-lab-ecs-task"
+         ],
+         "Sid": "PassEcsRoles"
+        },
+        {
+         "Action": [
+          "lambda:GetFunction",
+          "lambda:GetFunctionConfiguration",
+          "lambda:UpdateFunctionCode",
+          "lambda:UpdateFunctionConfiguration"
+         ],
+         "Effect": "Allow",
+         "Resource": "arn:aws:lambda:us-east-1:982081058012:function:arbitium0813-peer-lab",
+         "Sid": "LambdaHandlersOptional"
+        },
+        {
+         "Action": [
+          "iam:GetRole",
+          "iam:PassRole"
+         ],
+         "Effect": "Allow",
+         "Resource": "arn:aws:iam::982081058012:role/arbitium0813-peer-lab-role"
+        },
+        {
+         "Action": [
+          "ssm:GetParameter",
+          "ssm:GetParameters"
+         ],
+         "Effect": "Allow",
+         "Resource": [
+          "arn:aws:ssm:us-east-1:982081058012:parameter/arbitium0813/bootstrap/deploy-input",
+          "arn:aws:ssm:us-east-1:982081058012:parameter/arbitium0813/bootstrap/ecs-security-groups",
+          "arn:aws:ssm:us-east-1:982081058012:parameter/arbitium0813/bootstrap/ecs-subnets",
+          "arn:aws:ssm:us-east-1:982081058012:parameter/arbitium0813/bootstrap/ecs-vpc"
+         ],
+         "Sid": "SsmReadDeployInput"
+        }
+       ],
+       "Version": "2012-10-17"
+      },
+      "PolicyName": "GitHubActionsHandlersPolicy-arbitium0813-lab-staging"
+     }
+    ],
+    "RoleName": "GitHubActionsHandlersRole-arbitium0813-lab-staging"
+   },
+   "Metadata": {
+    "aws:cdk:path": "arbitium0813-peer-lab/Compute/HandlersOidcDeployRoleStaging/Resource"
+   }
+  },
+  "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Version": "2012-10-17",
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ]
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "arbitium0813-peer-lab/Custom::S3AutoDeleteObjectsCustomResourceProvider/Role"
+   }
+  },
+  "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-982081058012-us-east-1",
+     "S3Key": "faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6.zip"
+    },
+    "Timeout": 900,
+    "MemorySize": 128,
+    "Handler": "index.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs24.x",
+    "Description": {
+     "Fn::Join": [
+      "",
+      [
+       "Lambda function for auto-deleting objects in ",
+       {
+        "Ref": "ComputeResultsBucketA384D716"
+       },
+       " S3 bucket."
+      ]
+     ]
+    }
+   },
+   "DependsOn": [
+    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "arbitium0813-peer-lab/Custom::S3AutoDeleteObjectsCustomResourceProvider/Handler",
+    "aws:asset:path": "asset.faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6",
+    "aws:asset:property": "Code"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/5VRwU7DMAz9lvWcBdgkpHEbm+AC2jS4IYSy1Cte23iKHWCq+u+kDVDYjZPt956f7WSiJ5czfT4y7zy2eTmucKubBzG2VBtgCt6CitxLw1PdXAdbgqjFzqXsqclq/ECXXWW/+zt9lPcU6ySdB6ElVCCw2u7BCmfts0rUmiq0x8E11f/wTg1xaYEaXG/dKrBeNxs4EKOQ7+2HqqNZNxFbVIEFvHo0XC5hhw4FyXXqU4ScGHTgB6xVaOo4hCro7bs4HPOV3RtnCsgH/A/QqoqKuMkdFbeewqETfOeRM/U2NzpiN8HZNHIR96X652/6s4Z8FeQQ5ES09vSGOfhrw6DmzCDxrQp0RavWR3kldzbVFxM9G+0ZceyDE6xBb1L8BIi+LjchAgAA"
+   },
+   "Metadata": {
+    "aws:cdk:path": "arbitium0813-peer-lab/CDKMetadata/Default"
+   }
+  }
+ },
+ "Outputs": {
+  "ComputeHandlersEcrRepoName0F256C32": {
+   "Value": {
+    "Ref": "ComputeHandlersEcrRepoC8A63E25"
+   }
+  },
+  "ComputeHandlersEcrRepoUri0158104D": {
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      {
+       "Fn::Select": [
+        4,
+        {
+         "Fn::Split": [
+          ":",
+          {
+           "Fn::GetAtt": [
+            "ComputeHandlersEcrRepoC8A63E25",
+            "Arn"
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      ".dkr.ecr.",
+      {
+       "Fn::Select": [
+        3,
+        {
+         "Fn::Split": [
+          ":",
+          {
+           "Fn::GetAtt": [
+            "ComputeHandlersEcrRepoC8A63E25",
+            "Arn"
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      ".",
+      {
+       "Ref": "AWS::URLSuffix"
+      },
+      "/",
+      {
+       "Ref": "ComputeHandlersEcrRepoC8A63E25"
+      }
+     ]
+    ]
+   }
+  },
+  "ComputeHandlersEcsClusterName32CDBAD3": {
+   "Value": "arbitium0813-peer-lab"
+  },
+  "ComputeHandlersResultsBucketNameB7647493": {
+   "Value": {
+    "Ref": "ComputeResultsBucketA384D716"
+   }
+  },
+  "ComputeHandlersExecutionRoleArn2AC24183": {
+   "Value": {
+    "Fn::GetAtt": [
+     "ComputeEcsExecutionRole862D9DBF",
+     "Arn"
+    ]
+   }
+  },
+  "ComputeHandlersTaskRoleArn8EDDF030": {
+   "Value": {
+    "Fn::GetAtt": [
+     "ComputeEcsTaskRole82DE5989",
+     "Arn"
+    ]
+   }
+  },
+  "ComputeHandlersLambdaRoleArn833C3628": {
+   "Value": {
+    "Fn::GetAtt": [
+     "ComputeHandlersLambdaRole7EA2F2BD",
+     "Arn"
+    ]
+   }
+  },
+  "ComputeHandlersLambdaLogGroupName769FA731": {
+   "Value": {
+    "Ref": "ComputeHandlersLambdaLogGroupB03E2C66"
+   }
+  },
+  "ComputeHandlersLambdaFunctionName3250848C": {
+   "Value": "arbitium0813-peer-lab"
+  },
+  "ComputeHandlersTaskFamilyD73E0C2C": {
+   "Value": "arbitium0813-peer-lab-ecs"
+  },
+  "ComputeHandlersOidcDeployRoleArnProduction186D5802": {
+   "Value": {
+    "Fn::GetAtt": [
+     "ComputeHandlersOidcDeployRoleProduction05C7B835",
+     "Arn"
+    ]
+   }
+  },
+  "ComputeHandlersOidcDeployRoleArnStaging4E9BCB72": {
+   "Value": {
+    "Fn::GetAtt": [
+     "ComputeHandlersOidcDeployRoleStaging7DC6BBBB",
+     "Arn"
+    ]
+   }
+  }
+ },
+ "Parameters": {
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

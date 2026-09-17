@@ -22,7 +22,7 @@ class LambdaEnvTests(unittest.TestCase):
     def test_drops_console_ci_and_reserved_keys(self) -> None:
         filtered = filter_lambda_env(
             {
-                "WL_NAME": "arbitium0813",
+                "WL_NAME": "acme0813",
                 "VITE_WEBSOCKET_URL": "wss://example/production/",
                 "AMPLIFY_APP_ID": "d123",
                 "AMPLIFY_CONSOLE_URL": "https://staging.example.com",
@@ -31,13 +31,13 @@ class LambdaEnvTests(unittest.TestCase):
                 "AWS_REGION": "us-east-1",
                 "LAMBDA_BACKEND_ARN": "arn:aws:lambda:...",
                 "OPENAI_API_KEY": "sk-test",
-                "EXTERNAL_HANDLERS_ECS_HANDLERS": "arbitium:aws_threats;arbitiumtriage:aws_aid_networks",
+                "EXTERNAL_HANDLERS_ECS_HANDLERS": "acmewidget:aws_threats;acmeextra:aws_aid_networks",
                 "bad-key": "nope",
             }
         )
         self.assertEqual(
             filtered,
-            {"WL_NAME": "arbitium0813", "OPENAI_API_KEY": "sk-test"},
+            {"WL_NAME": "acme0813", "OPENAI_API_KEY": "sk-test"},
         )
 
     def test_payload_size_is_utf8_keys_plus_values(self) -> None:

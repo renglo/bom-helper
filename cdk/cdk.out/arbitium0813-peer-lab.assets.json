@@ -1,0 +1,36 @@
+{
+  "version": "54.0.0",
+  "files": {
+    "faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6": {
+      "displayName": "arbitium0813-peer-lab/Custom::S3AutoDeleteObjectsCustomResourceProvider Code",
+      "source": {
+        "path": "asset.faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6",
+        "packaging": "zip"
+      },
+      "destinations": {
+        "982081058012-us-east-1-8fde57f5": {
+          "bucketName": "cdk-hnb659fds-assets-982081058012-us-east-1",
+          "objectKey": "faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6.zip",
+          "region": "us-east-1",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::982081058012:role/cdk-hnb659fds-file-publishing-role-982081058012-us-east-1"
+        }
+      }
+    },
+    "59a98f0fe0051d8bebff124c9147467ba932347d70cf61c5ded881f8af337558": {
+      "displayName": "arbitium0813-peer-lab Template",
+      "source": {
+        "path": "arbitium0813-peer-lab.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "982081058012-us-east-1-b08c8520": {
+          "bucketName": "cdk-hnb659fds-assets-982081058012-us-east-1",
+          "objectKey": "59a98f0fe0051d8bebff124c9147467ba932347d70cf61c5ded881f8af337558.json",
+          "region": "us-east-1",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::982081058012:role/cdk-hnb659fds-file-publishing-role-982081058012-us-east-1"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}

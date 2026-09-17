@@ -13,10 +13,12 @@ Nested schema:
 
 Pipelines:
   backend / console — one row per (tenant, stage) with OIDC + SSM fields.
-  handlers — one row per tenant (deploy_stage from handlers_bom JSON).
+  handlers — one row per tenant (overflow node; deploy_stage from handlers_bom JSON).
+  peers — one row per (tenant, peer) from the ``peers:`` catalog.
 
 Flags:
-  --build-bom           print backend BOM version only
+  --build-bom           print backend/hub BOM version only
+  --console-bom         print console BOM version only
   --handlers-bom        print handlers BOM version only
   --filter-json PATH    intersect with another matrix/filter JSON
 """
@@ -42,6 +44,13 @@ OIDC_HANDLERS_ROLE_TEMPLATE = (
 PLATFORM_VARS_SSM_TEMPLATE = "/{id}/bootstrap/platform-vars/{stage}"
 DEPLOY_INPUT_SSM_TEMPLATE = "/{id}/bootstrap/deploy-input"
 
+from peers import (  # noqa: E402
+    handlers_bom_file,
+    handlers_unit_name,
+    load_peers,
+    oidc_handlers_role_name,
+    peer_stack_name,
+)
 from registry_targets import (  # noqa: E402
     DEFAULT_AWS_REGION,
     DEFAULT_REGISTRY,
@@ -72,6 +81,16 @@ def resolve_build_bom(data: dict, bom_dir: Path) -> str:
     return _latest_bom(bom_dir)
 
 
+def resolve_console_bom(data: dict, console_dir: Path) -> str:
+    root = str(data.get("console_bom", "")).strip()
+    if root:
+        return root
+    linked = str(data.get("bom", "")).strip()
+    if linked:
+        return linked
+    return _latest_bom(console_dir)
+
+
 def resolve_handlers_bom(data: dict, handlers_dir: Path) -> str:
     root = str(data.get("handlers_bom", "")).strip()
     if root:
@@ -96,6 +115,16 @@ def _oidc_role_arn(account: str, env_id: str, stage: str) -> str:
 
 def _oidc_handlers_role_arn(account: str, env_id: str, stage: str) -> str:
     return OIDC_HANDLERS_ROLE_TEMPLATE.format(account=account, id=env_id, stage=stage)
+
+
+def _oidc_peer_handlers_role_arn(account: str, env_id: str, stage: str, peer_id: str) -> str:
+    role = oidc_handlers_role_name(env_id, stage, peer_id)
+    return f"arn:aws:iam::{account}:role/{role}"
+
+
+def _peer_handlers_compute(compute: str) -> str:
+    """Packager flag: zip-only vs zip+ECS image (fargate and ec2 both build the large image)."""
+    return "lambda_only" if compute == "lambda_only" else "ecs"
 
 
 def _platform_vars_parameter(env_id: str, stage: str) -> str:
@@ -205,6 +234,59 @@ def _handlers_rows(data: dict, repo_root: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def _peer_rows(data: dict, repo_root: Path) -> list[dict[str, Any]]:
+    peers = load_peers(data)
+    tenants_raw = data.get("tenants") or {}
+    if not isinstance(tenants_raw, dict):
+        raise RuntimeError("deploy_targets.yml: tenants must be a mapping")
+
+    rows: list[dict[str, Any]] = []
+    for tenant_key, tenant_cfg in tenants_raw.items():
+        if not isinstance(tenant_cfg, dict):
+            continue
+        tenant = str(tenant_key).strip()
+        env_id = str(tenant_cfg.get("id", "")).strip()
+        account = str(tenant_cfg.get("aws_account", "")).strip()
+        tenant_region = str(tenant_cfg.get("aws_region", DEFAULT_AWS_REGION)).strip() or DEFAULT_AWS_REGION
+        stages = tenant_cfg.get("stages") or {}
+        if not tenant or not env_id or not account:
+            continue
+        if not isinstance(stages, dict):
+            continue
+        if not any(_stage_enabled(cfg) for cfg in stages.values()):
+            continue
+        for peer in peers:
+            bom_file = handlers_bom_file(repo_root, peer)
+            if not bom_file.is_file():
+                raise RuntimeError(f"Peer handlers BOM not found: {bom_file}")
+            deploy_stage = _load_handlers_deploy_stage(bom_file.parent, str(peer["handlers_bom"]).lstrip("v"))
+            region = peer["aws_region"] or tenant_region
+            extensions = ",".join(peer["extensions"])
+            rows.append(
+                {
+                    "tenant": tenant,
+                    "peer": peer["id"],
+                    "id": env_id,
+                    "aws_account": account,
+                    "aws_region": region,
+                    "deploy_stage": deploy_stage,
+                    "handlers_bom": peer["handlers_bom"],
+                    "handlers_bom_file": str(bom_file.relative_to(repo_root)),
+                    "handlers_compute": _peer_handlers_compute(peer["compute"]),
+                    "compute": peer["compute"],
+                    "task_size": peer["task_size"],
+                    "extensions": extensions,
+                    "stack_name": peer_stack_name(env_id, peer["id"]),
+                    "function_name": handlers_unit_name(env_id, peer["id"]),
+                    "oidc_role_arn": _oidc_peer_handlers_role_arn(
+                        account, env_id, deploy_stage, peer["id"]
+                    ),
+                    "ssm_parameter": _deploy_input_parameter(env_id),
+                }
+            )
+    return rows
+
+
 def _apply_filter(rows: list[dict[str, Any]], filter_path: Path, pipeline: str) -> list[dict[str, Any]]:
     if not filter_path.is_file():
         return rows
@@ -216,6 +298,24 @@ def _apply_filter(rows: list[dict[str, Any]], filter_path: Path, pipeline: str) 
     if pipeline == "handlers":
         tenants = {str(x.get("tenant", "")).strip() for x in allowed if isinstance(x, dict)}
         return [r for r in rows if r.get("tenant") in tenants]
+
+    if pipeline == "peers":
+        tenants = {
+            str(x.get("tenant", "")).strip()
+            for x in allowed
+            if isinstance(x, dict) and str(x.get("tenant", "")).strip()
+        }
+        peer_ids = {
+            str(x.get("peer", "")).strip()
+            for x in allowed
+            if isinstance(x, dict) and str(x.get("peer", "")).strip()
+        }
+        filtered = rows
+        if tenants:
+            filtered = [r for r in filtered if r.get("tenant") in tenants]
+        if peer_ids:
+            filtered = [r for r in filtered if r.get("peer") in peer_ids]
+        return filtered
 
     keys = {
         (str(x.get("tenant", "")).strip(), str(x.get("stage", "")).strip().lower())
@@ -230,12 +330,13 @@ def main() -> int:
     parser.add_argument("targets_file", help="Path to deploy_targets.yml")
     parser.add_argument(
         "--pipeline",
-        choices=("backend", "console", "handlers"),
+        choices=("backend", "console", "handlers", "peers"),
         default="backend",
         help="Matrix shape and filters",
     )
     parser.add_argument("--stage", choices=VALID_STAGES, default="", help="Optional stage filter (backend/console)")
-    parser.add_argument("--build-bom", action="store_true", help="Print backend BOM version only")
+    parser.add_argument("--build-bom", action="store_true", help="Print backend/hub BOM version only")
+    parser.add_argument("--console-bom", action="store_true", help="Print console BOM version only")
     parser.add_argument("--handlers-bom", action="store_true", help="Print handlers BOM version only")
     parser.add_argument("--registry", action="store_true", help="Print first CodeArtifact registry JSON")
     parser.add_argument("--registries", action="store_true", help="Print all CodeArtifact registry JSON")
@@ -252,6 +353,9 @@ def main() -> int:
 
     if args.build_bom:
         print(resolve_build_bom(data, repo_root / "bom"))
+        return 0
+    if args.console_bom:
+        print(resolve_console_bom(data, repo_root / "console_bom"))
         return 0
     if args.handlers_bom:
         print(resolve_handlers_bom(data, repo_root / "handlers_bom"))
@@ -272,6 +376,8 @@ def main() -> int:
 
     if args.pipeline == "handlers":
         rows = _handlers_rows(data, repo_root)
+    elif args.pipeline == "peers":
+        rows = _peer_rows(data, repo_root)
     else:
         rows = _iter_tenant_stages(data)
         if args.stage:

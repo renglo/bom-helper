@@ -1,4 +1,9 @@
 *.pyc
 .venv/
+venv/
 __pycache__/
 wheels/
+
+# CDK synth assemblies (templates, assets, manifest) — see deploy_peer_cdk.sh
+cdk/output/
+output/

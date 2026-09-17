@@ -1,4 +1,4 @@
-# Lambda container image for Renglo / Arbitium backend.
+# Lambda container image for Renglo platform backends.
 #
 # Build context is the BOM repo root (matching CI):
 #   docker build -f Dockerfile -t <account>.dkr.ecr.<region>.amazonaws.com/<repo>:<tag> .

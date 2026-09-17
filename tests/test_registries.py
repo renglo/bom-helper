@@ -74,8 +74,8 @@ class ResolveRegistriesTests(unittest.TestCase):
             _base(
                 registries=[
                     {
-                        "domain": "arbitium",
-                        "npm_scopes": ["@arbitium"],
+                        "domain": "globex",
+                        "npm_scopes": ["@globex"],
                     },
                     {
                         "domain": "renglo",
@@ -86,7 +86,7 @@ class ResolveRegistriesTests(unittest.TestCase):
             )
         )
         self.assertEqual(len(regs), 2)
-        self.assertEqual(regs[0]["domain"], "arbitium")
+        self.assertEqual(regs[0]["domain"], "globex")
         self.assertEqual(regs[0]["domain_owner"], "111122223333")
         self.assertEqual(regs[1]["domain"], "renglo")
 
@@ -116,12 +116,12 @@ class ResolveRegistriesTests(unittest.TestCase):
         first = resolve_registry(
             _base(
                 registries=[
-                    {"domain": "arbitium"},
+                    {"domain": "globex"},
                     {"domain": "renglo", "domain_owner": "339713094352"},
                 ]
             )
         )
-        self.assertEqual(first["domain"], "arbitium")
+        self.assertEqual(first["domain"], "globex")
 
 
 class ConfigureCodeartifactHelpersTests(unittest.TestCase):
@@ -137,14 +137,14 @@ class ConfigureCodeartifactHelpersTests(unittest.TestCase):
     def test_configure_npm_does_not_set_always_auth(self) -> None:
         registries = [
             {
-                "domain": "arbitium",
+                "domain": "globex",
                 "domain_owner": "111122223333",
                 "npm_repository": "npm-store",
                 "region": "us-east-1",
-                "npm_scopes": ["@arbitium"],
+                "npm_scopes": ["@globex"],
             }
         ]
-        endpoint = "https://arbitium-111.d.codeartifact.us-east-1.amazonaws.com/npm/npm-store/"
+        endpoint = "https://globex-111.d.codeartifact.us-east-1.amazonaws.com/npm/npm-store/"
         with (
             patch("configure_codeartifact._login"),
             patch("configure_codeartifact._repository_endpoint", return_value=endpoint),
@@ -153,7 +153,7 @@ class ConfigureCodeartifactHelpersTests(unittest.TestCase):
         ):
             configure_npm(registries)
         keys = [call.args[0][3] for call in run.call_args_list]
-        self.assertTrue(any(key == "@arbitium:registry" for key in keys))
+        self.assertTrue(any(key == "@globex:registry" for key in keys))
         self.assertTrue(any(key.endswith(":_authToken") for key in keys))
         self.assertFalse(any("always-auth" in key for key in keys))
 

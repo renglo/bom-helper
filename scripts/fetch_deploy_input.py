@@ -177,6 +177,11 @@ def main() -> int:
         default="",
         help="YAML/JSON file of VARS overlays (platform_env.yml); overlay wins over SSM",
     )
+    parser.add_argument(
+        "--targets",
+        default="",
+        help="deploy_targets.yml; when peers: is set, overwrite EXTERNAL_HANDLERS with the catalog union",
+    )
     args = parser.parse_args()
 
     payload = _fetch_ssm_json(args.parameter, args.region)
@@ -205,6 +210,25 @@ def main() -> int:
             print(f"overlay-env failed: {exc}", file=sys.stderr)
             return 1
         print(f"Applied overlay from {overlay_path}")
+
+    if args.targets:
+        targets_path = Path(args.targets)
+        if not targets_path.is_file():
+            print(f"targets not found: {targets_path}", file=sys.stderr)
+            return 1
+        try:
+            import yaml
+        except ImportError as exc:
+            raise RuntimeError("PyYAML required for --targets") from exc
+        from peers import apply_external_handlers_from_peers, load_peers
+
+        targets = yaml.safe_load(targets_path.read_text(encoding="utf-8")) or {}
+        vars_block = payload.setdefault("VARS", {})
+        if not isinstance(vars_block, dict):
+            vars_block = {}
+            payload["VARS"] = vars_block
+        apply_external_handlers_from_peers(vars_block, load_peers(targets))
+        print(f"Derived EXTERNAL_HANDLERS from {targets_path} peers catalog")
 
     if args.output:
         out = Path(args.output)

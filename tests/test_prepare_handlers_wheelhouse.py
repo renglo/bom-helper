@@ -51,7 +51,7 @@ def _write_sdist(dest: Path, dist: str, version: str, *, router: bool, config: d
 
 class PrepareAssetsTest(unittest.TestCase):
     def test_normalize(self) -> None:
-        self.assertEqual(normalize_dist_name("Arbitium_Lab"), "arbitium-lab")
+        self.assertEqual(normalize_dist_name("Acme_Widget"), "acme-widget")
 
     def test_extract_primary_and_extra(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -61,14 +61,14 @@ class PrepareAssetsTest(unittest.TestCase):
             wheelhouse.mkdir()
             _write_sdist(
                 wheelhouse,
-                "arbitium-lab",
+                "acme-widget",
                 "0.0.1",
                 router=True,
                 config={"handlers": {"a": {}}},
             )
             _write_sdist(
                 wheelhouse,
-                "arbitium-triage",
+                "acme-extra",
                 "0.0.1",
                 router=True,
                 config={"handlers": {"b": {}}},
@@ -76,38 +76,38 @@ class PrepareAssetsTest(unittest.TestCase):
             extract_assets(
                 wheelhouse,
                 assets,
-                ["arbitium-lab", "arbitium-triage"],
+                ["acme-widget", "acme-extra"],
             )
             self.assertTrue((assets / "lambda_router.py").is_file())
             self.assertTrue((assets / "handlers_config.json").is_file())
-            extra = assets / "extras" / "arbitium-triage" / "handlers_config.json"
+            extra = assets / "extras" / "acme-extra" / "handlers_config.json"
             self.assertTrue(extra.is_file())
             text = (assets / "handlers_config.json").read_text(encoding="utf-8")
             self.assertIn('"a"', text)
-            self.assertNotIn('"b"', text)  # extra stays under extras/
+            self.assertIn('"b"', text)  # merged into primary for multi-package peers
 
     def test_large_extra_specs(self) -> None:
         self.assertEqual(
-            large_extra_specs(["arbitium-lab", "arbitium-triage"]),
+            large_extra_specs(["acme-widget", "acme-extra"]),
             [
-                "arbitium-lab[large-dependencies]",
-                "arbitium-triage[large-dependencies]",
+                "acme-widget[large-dependencies]",
+                "acme-extra[large-dependencies]",
             ],
         )
 
     def test_pin_specs_from_wheelhouse(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             wheelhouse = Path(raw)
-            (wheelhouse / "arbitium_lab-0.0.5-py3-none-any.whl").write_bytes(b"x")
-            (wheelhouse / "arbitium_lab-0.0.4-py3-none-any.whl").write_bytes(b"x")
-            self.assertEqual(version_in_wheelhouse(wheelhouse, "arbitium-lab"), "0.0.5")
+            (wheelhouse / "acme_widget-0.0.5-py3-none-any.whl").write_bytes(b"x")
+            (wheelhouse / "acme_widget-0.0.4-py3-none-any.whl").write_bytes(b"x")
+            self.assertEqual(version_in_wheelhouse(wheelhouse, "acme-widget"), "0.0.5")
             self.assertEqual(
-                pin_specs(["arbitium-lab"], wheelhouse),
-                ["arbitium-lab==0.0.5"],
+                pin_specs(["acme-widget"], wheelhouse),
+                ["acme-widget==0.0.5"],
             )
             self.assertEqual(
-                large_extra_specs(["arbitium-lab"], wheelhouse),
-                ["arbitium-lab[large-dependencies]==0.0.5"],
+                large_extra_specs(["acme-widget"], wheelhouse),
+                ["acme-widget[large-dependencies]==0.0.5"],
             )
 
     def test_prepare_with_large_deps_calls_download(self) -> None:
@@ -119,7 +119,7 @@ class PrepareAssetsTest(unittest.TestCase):
             artifacts.mkdir()
             _write_sdist(
                 artifacts,
-                "arbitium-lab",
+                "acme-widget",
                 "0.0.1",
                 router=True,
                 config={"handlers": {}},
@@ -136,15 +136,15 @@ class PrepareAssetsTest(unittest.TestCase):
                     out_dir=root / "out",
                     from_monorepo=[],
                     from_artifacts=artifacts,
-                    packages=["arbitium-lab"],
+                    packages=["acme-widget"],
                     skip_deps=False,
                     with_large_deps=True,
                 )
-            self.assertEqual(ordered, ["arbitium-lab"])
-            self.assertEqual(calls[0], (["arbitium-lab==0.0.1"], False))
+            self.assertEqual(ordered, ["acme-widget"])
+            self.assertEqual(calls[0], (["acme-widget==0.0.1"], False))
             self.assertEqual(
                 calls[1],
-                (["arbitium-lab[large-dependencies]==0.0.1"], True),
+                (["acme-widget[large-dependencies]==0.0.1"], True),
             )
 
 
