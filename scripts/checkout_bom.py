@@ -4,6 +4,7 @@
 Usage:
     python scripts/checkout_bom.py bom/v0.0.7.json --pipeline backend
     python scripts/checkout_bom.py handlers_bom/v0.0.3.json --pipeline handlers
+    python scripts/checkout_bom.py peers_bom/lab/v0.1.8.json --pipeline peers
 
 Auth (GitHub Actions): set GITHUB_TOKEN or GH_TOKEN. Origin URLs stay token-free;
 the token is passed only as an http.extraheader on fetch.
@@ -27,6 +28,7 @@ from bom_manifest import (
     ci_outputs,
     extension_handles,
     handlers_python_packages,
+    infer_source,
     load_bom,
     npm_extension_handles,
     package_pins,
@@ -112,11 +114,12 @@ def main() -> int:
         data = load_bom(bom_file)
         all_specs = resolve_specs(bom_file, data)
         specs = checkout_specs(all_specs, args.pipeline, data)
+        source = infer_source(bom_file, data)
     except (OSError, ValueError, json.JSONDecodeError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
 
-    if not pipeline_has_work(args.pipeline, specs, data):
+    if not pipeline_has_work(args.pipeline, specs, data, source=source):
         print(f"No repos or package pins for pipeline {args.pipeline!r} in {bom_file}", file=sys.stderr)
         return 1
 
@@ -156,7 +159,7 @@ def main() -> int:
         "handlers_wheelhouse_packages": ",".join(all_pins),
         "extension_handles": ",".join(
             list(dict.fromkeys([*pin_handles, *extension_handles(specs)]))
-            if args.pipeline == "handlers"
+            if args.pipeline in ("handlers", "peers")
             else extension_handles(specs)
         ),
     }
@@ -171,7 +174,7 @@ def main() -> int:
         print(f"  npm_local_specs={outputs['npm_local_specs']}")
     if outputs["console_host_spec"]:
         print(f"  console_host_spec={outputs['console_host_spec']}")
-    if args.pipeline == "handlers":
+    if args.pipeline in ("handlers", "peers"):
         print(f"  handlers_packages={outputs['handlers_packages'] or '(none)'}")
         print(
             f"  handlers_wheelhouse_packages="

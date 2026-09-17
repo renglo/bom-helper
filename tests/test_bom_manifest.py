@@ -17,6 +17,7 @@ from bom_manifest import (  # noqa: E402
     console_dependency_specs,
     console_host_spec,
     handlers_python_packages,
+    infer_source,
     load_bom,
     local_npm_install_paths,
     npm_extension_handles,
@@ -114,9 +115,11 @@ class BomManifestV2Tests(unittest.TestCase):
         self.assertEqual(backend, [])
         self.assertTrue(pipeline_has_work("backend", backend, data))
 
-    def test_python_only_peer_bom_is_valid_for_handlers(self) -> None:
-        path = _write(
-            Path(self._tmp("peer.json")),
+    def test_python_only_peer_bom_is_valid_for_peers(self) -> None:
+        path = Path(self._tmp("repo")) / "peers_bom" / "lab" / "v0.1.8.json"
+        path.parent.mkdir(parents=True)
+        _write(
+            path,
             {
                 "version": "v0.1.8",
                 "python": {
@@ -129,14 +132,35 @@ class BomManifestV2Tests(unittest.TestCase):
             },
         )
         data = load_bom(path)
+        self.assertEqual(infer_source(path, data), "peers")
         specs = resolve_specs(path, data)
-        handlers = checkout_specs(specs, "handlers", data)
-        self.assertEqual(handlers, [])
-        self.assertTrue(pipeline_has_work("handlers", handlers, data))
+        peers = checkout_specs(specs, "peers", data)
+        self.assertEqual(peers, [])
+        self.assertTrue(pipeline_has_work("peers", peers, data, source="peers"))
+        self.assertFalse(
+            pipeline_has_work("handlers", checkout_specs(specs, "handlers", data), data, source="peers")
+        )
+        self.assertEqual(checkout_specs(specs, "handlers", data), [])
         _all, packages = handlers_python_packages(data)
         self.assertIn("arbitium-lab", packages)
         self.assertIn("arbitium-triage", packages)
         self.assertEqual(len(_all), 4)
+
+    def test_peer_bom_git_repos_are_peers_pipeline_not_handlers(self) -> None:
+        path = Path(self._tmp("repo")) / "peers_bom" / "lab" / "v0.1.0.json"
+        path.parent.mkdir(parents=True)
+        _write(
+            path,
+            {
+                "version": "v0.1.0",
+                "repos": {"arbitium/arbitiumlab": {"commit": "abc"}},
+            },
+        )
+        data = load_bom(path)
+        specs = resolve_specs(path, data)
+        self.assertEqual(specs[0].pipelines, frozenset({"peers"}))
+        self.assertEqual([s.key for s in checkout_specs(specs, "peers", data)], ["arbitium/arbitiumlab"])
+        self.assertEqual(checkout_specs(specs, "handlers", data), [])
 
     def test_empty_bom_rejected(self) -> None:
         path = _write(Path(self._tmp("empty.json")), {"version": "v0.0.0"})

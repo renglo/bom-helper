@@ -18,11 +18,12 @@ Layout and pipeline membership come from conventions (overrideable per repo):
   any other org/name           -> extensions/<name>
 
 Unknown repos in bom/*.json default to backend+console.
-Unknown repos in handlers_bom/*.json or peers_bom/**/*.json default to handlers.
+Unknown repos in handlers_bom/*.json default to handlers (overflow node).
+Unknown repos in peers_bom/**/*.json default to peers.
 
 Optional per-repo JSON fields:
   path        Checkout directory relative to the workspace root
-  pipelines   List of backend | console | handlers
+  pipelines   List of backend | console | handlers | peers
 """
 
 from __future__ import annotations
@@ -36,7 +37,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-VALID_PIPELINES = ("backend", "console", "handlers")
+VALID_PIPELINES = ("backend", "console", "handlers", "peers")
 DEFAULT_BRANCH = "main"
 
 CORE_REPOS: dict[str, tuple[str, frozenset[str]]] = {
@@ -107,6 +108,8 @@ def default_pipelines(repo_key: str, source: str) -> frozenset[str]:
     name = repo_key.split("/", 1)[-1].strip()
     if is_wl_repo_name(name):
         return frozenset({"console"})
+    if source == "peers":
+        return frozenset({"peers"})
     if source == "handlers":
         return frozenset({"handlers"})
     return frozenset({"backend", "console"})
@@ -116,7 +119,9 @@ def infer_source(bom_file: Path, data: dict[str, Any]) -> str:
     parts = {p.lower() for p in bom_file.resolve().parts}
     if "console_bom" in parts:
         return "console"
-    if "handlers_bom" in parts or "peers_bom" in parts or str(data.get("deploy_stage", "")).strip():
+    if "peers_bom" in parts:
+        return "peers"
+    if "handlers_bom" in parts or str(data.get("deploy_stage", "")).strip():
         return "handlers"
     return "bom"
 
@@ -318,7 +323,7 @@ def local_npm_install_paths(dest_root: Path, checkout: list[RepoSpec]) -> list[s
 def repos_skipped_by_pins(data: dict[str, Any], pipeline: str) -> set[str]:
     """Repo keys that a package pin replaces for this pipeline."""
     skipped: set[str] = set()
-    if pipeline in ("backend", "handlers"):
+    if pipeline in ("backend", "handlers", "peers"):
         for name in package_pins(data, "python"):
             repo = python_package_to_repo(name)
             if repo:
@@ -460,13 +465,27 @@ def format_package_plan(data: dict[str, Any]) -> str:
     return "\n".join(lines) if lines else ""
 
 
-def pipeline_has_work(pipeline: str, selected: list[RepoSpec], data: dict[str, Any]) -> bool:
+def pipeline_has_work(
+    pipeline: str,
+    selected: list[RepoSpec],
+    data: dict[str, Any],
+    *,
+    source: str = "",
+) -> bool:
     if selected:
         return True
-    if pipeline in ("backend", "handlers"):
-        return bool(package_pins(data, "python"))
     if pipeline == "console":
         return bool(package_pins(data, "npm"))
+    if pipeline == "backend":
+        return bool(package_pins(data, "python"))
+    if pipeline == "handlers":
+        if source == "peers":
+            return False
+        return bool(package_pins(data, "python"))
+    if pipeline == "peers":
+        if source == "handlers":
+            return False
+        return bool(package_pins(data, "python"))
     return False
 
 
@@ -529,11 +548,14 @@ def main() -> int:
         data = load_bom(path)
         specs = resolve_specs(path, data)
         selected = checkout_specs(specs, args.pipeline, data) if args.pipeline else specs
+        source = infer_source(path, data)
     except (OSError, ValueError, json.JSONDecodeError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
 
-    if args.pipeline and not pipeline_has_work(args.pipeline, selected, data):
+    if args.pipeline and not pipeline_has_work(
+        args.pipeline, selected, data, source=source
+    ):
         print(f"No repos or package pins for pipeline {args.pipeline!r} in {path}", file=sys.stderr)
         return 1
 
@@ -559,11 +581,12 @@ def main() -> int:
     if pins:
         print(pins)
     print(format_plan(selected))
-    if args.pipeline == "handlers":
-        _all, handlers = handlers_python_packages(data)
-        print(f"  handlers --packages {','.join(handlers) or '(none)'}")
+    if args.pipeline in ("handlers", "peers"):
+        _all, pkgs = handlers_python_packages(data)
+        label = "peers" if args.pipeline == "peers" else "handlers"
+        print(f"  {label} --packages {','.join(pkgs) or '(none)'}")
         if _all:
-            print(f"  handlers wheelhouse pins: {','.join(_all)}")
+            print(f"  {label} wheelhouse pins: {','.join(_all)}")
     if args.pipeline == "console":
         candidates = extension_handles(selected)
         print(f"  console extension candidates: {','.join(candidates) or '(none)'}")
