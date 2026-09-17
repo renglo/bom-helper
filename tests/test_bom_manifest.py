@@ -114,6 +114,30 @@ class BomManifestV2Tests(unittest.TestCase):
         self.assertEqual(backend, [])
         self.assertTrue(pipeline_has_work("backend", backend, data))
 
+    def test_python_only_peer_bom_is_valid_for_handlers(self) -> None:
+        path = _write(
+            Path(self._tmp("peer.json")),
+            {
+                "version": "v0.1.8",
+                "python": {
+                    "renglo-lib": "0.0.5rc2",
+                    "renglo-gro": "0.0.4rc1",
+                    "arbitium-lab": "0.0.7rc2",
+                    "arbitium-triage": "0.0.7rc1",
+                },
+                "repos": {},
+            },
+        )
+        data = load_bom(path)
+        specs = resolve_specs(path, data)
+        handlers = checkout_specs(specs, "handlers", data)
+        self.assertEqual(handlers, [])
+        self.assertTrue(pipeline_has_work("handlers", handlers, data))
+        _all, packages = handlers_python_packages(data)
+        self.assertIn("arbitium-lab", packages)
+        self.assertIn("arbitium-triage", packages)
+        self.assertEqual(len(_all), 4)
+
     def test_empty_bom_rejected(self) -> None:
         path = _write(Path(self._tmp("empty.json")), {"version": "v0.0.0"})
         with self.assertRaises(ValueError):

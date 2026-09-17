@@ -250,11 +250,11 @@ Omit `--peer-id` / `peer_id` context to synth/deploy **every** catalog peer (`cd
 
 ### 1e. Package and route — `*-bom` CI
 
-Commit `deploy_targets.yml` + `peers_bom/<peer_id>/` on the BOM repo `main` (or run **Deploy Handler Peers**). Workflow: `.github/workflows/deploy_peers.yml`.
+Commit `deploy_targets.yml` + `peers_bom/<peer_id>/` on the BOM repo `main` (or run **Deploy Peers**). Workflow: `.github/workflows/deploy_peers.yml`.
 
 Manual, one peer:
 
-- GitHub → Actions → **Deploy Handler Peers** → `tenant=<tenant>`, `peer=<peer_id>`.
+- GitHub → Actions → **Deploy Peers** → `tenant=<tenant>`, `peer=<peer_id>`.
 
 That job builds the zip (and ECS image when `compute` is not `lambda_only`), updates `{env_id}-peer-{peer_id}`, then writes SSM routes. Laptop equivalent after the stack exists:
 
@@ -320,7 +320,7 @@ peers:
 
 ### 2b. Deploy
 
-Push `peers_bom/` (and `deploy_targets.yml` if the version pointer moved) to `*-bom` `main`, or **workflow_dispatch** **Deploy Handler Peers** with `peer=<peer_id>`.
+Push `peers_bom/` (and `deploy_targets.yml` if the version pointer moved) to `*-bom` `main`, or **workflow_dispatch** **Deploy Peers** with `peer=<peer_id>`.
 
 Laptop equivalent (wheelhouse already prepared):
 
@@ -379,7 +379,7 @@ bash scripts/deploy_peer_cdk.sh synth --peer-id "$PEER_ID"
 bash scripts/deploy_peer_cdk.sh deploy --peer-id "$PEER_ID"
 ```
 
-CloudFormation adds cluster, ECR, task definition, results bucket, task role. Then `write_peer_routes.py` (so SSM gets `ecs_cluster` / bucket) and **Deploy Handler Peers** with `--large`. Until that finishes, `ecs_handlers` on this peer fail (`run_task` has no cluster).
+CloudFormation adds cluster, ECR, task definition, results bucket, task role. Then `write_peer_routes.py` (so SSM gets `ecs_cluster` / bucket) and **Deploy Peers** with `--large`. Until that finishes, `ecs_handlers` on this peer fail (`run_task` has no cluster).
 
 Going **down** (`fargate` → `lambda_only`) deletes ECS resources. Move or drop heavies in `handlers_config.json` first, ship that wheel, then CDK.
 
@@ -439,7 +439,7 @@ Authority: [`ops/git-convoy/cross-repo-feature-manual.md`](../../git-convoy/cros
 | Publish extension **wheels** to CodeArtifact | **Train** or **hotfix** (tags → CI) | `train tag-rc` / `train publish`, or `hotfix publish` on extension repos |
 | Deploy **API / console / backend** (Stack A/B) | **Adopt** on `*-bom` `main` | `git convoy adopt --bom ops/<tenant>-bom` writes `bom/`, `console_bom/`, and `peers_bom/<id>/` |
 | Pin wheels for a **peer** zip/ECS | **Adopt** (same train) | Placement in `deploy_targets.yml`; adopt regenerates `peers_bom/<peer_id>/` |
-| Package zip + SSM routes | **BOM push** | Push `*-bom` `main` → **Deploy Handler Peers** (or §1e laptop scripts) |
+| Package zip + SSM routes | **BOM push** | Push `*-bom` `main` → **Deploy Peers** (or §1e laptop scripts) |
 | First peer **IAM / Lambda / ECS stack** | **No** | Laptop `deploy_peer_cdk.sh` (§1d) — one-time or compute-shape changes |
 | Change `bom-helper` / peer CDK | **Aux**, not feature | `git convoy aux …` — separate from product trains |
 
@@ -547,7 +547,7 @@ Push triggers deploy CI by path:
 | `deploy_console.yml` | `console_bom/**` |
 | `deploy_peers.yml` | `peers_bom/**`, `deploy_targets.yml` |
 
-Or dispatch **Deploy Handler Peers** with `peer=<peer_id>` without waiting for a full push.
+Or dispatch **Deploy Peers** with `peer=<peer_id>` without waiting for a full push.
 
 Regenerate pin files locally (same rules as adopt split) without convoy:
 
@@ -585,7 +585,7 @@ These stay in §1–§4 of this doc:
 | Commit extension work across repos | `git convoy feature adopt` → `feature commit` → `feature prs` |
 | Publish rc wheels for staging train | `git convoy train tag-rc` → verify publish CI |
 | Refresh hub + console + peer pins | `git convoy adopt --bom ops/<tenant>-bom` → push BOM |
-| Ship adopted pins **to a peer** | Push BOM (or **Deploy Handler Peers**); stack must exist (§1d) |
+| Ship adopted pins **to a peer** | Push BOM (or **Deploy Peers**); stack must exist (§1d) |
 | Enable production on BOM | `git convoy adopt --production --bom ops/<tenant>-bom` |
 | Patch production extension quickly | `hotfix publish` → `hotfix adopt --bom ops/<tenant>-bom` → push |
 | Change which dists are on a peer | Edit `peers.<id>.python` in `deploy_targets.yml`, then adopt or `generate_bom.py` |

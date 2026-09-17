@@ -463,7 +463,7 @@ def format_package_plan(data: dict[str, Any]) -> str:
 def pipeline_has_work(pipeline: str, selected: list[RepoSpec], data: dict[str, Any]) -> bool:
     if selected:
         return True
-    if pipeline == "backend":
+    if pipeline in ("backend", "handlers"):
         return bool(package_pins(data, "python"))
     if pipeline == "console":
         return bool(package_pins(data, "npm"))
