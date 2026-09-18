@@ -579,7 +579,8 @@ class ComputeStack(Construct):
             removal_policy=RemovalPolicy.DESTROY,
         )
 
-        # --- Handlers Lambda (seed — pipeline updates code after first deploy) ---
+        # Seed ZipFile is always unpacked as index.py; peer_packager publish
+        # overwrites Handler to lambda_router.lambda_handler with the real zip.
         handlers_fn = aws_lambda_.CfnFunction(
             self,
             "HandlersLambda",
@@ -804,6 +805,8 @@ class ComputeStack(Construct):
             log_group_name=f"/aws/lambda/{handlers_lambda_function_name(env_name, peer_id)}",
             removal_policy=RemovalPolicy.DESTROY,
         )
+        # Seed ZipFile is always unpacked as index.py; peer_packager publish
+        # overwrites Handler to lambda_router.lambda_handler with the real zip.
         handlers_fn = aws_lambda_.CfnFunction(
             self,
             "HandlersLambda",
