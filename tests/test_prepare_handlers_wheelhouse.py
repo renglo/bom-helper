@@ -165,7 +165,16 @@ class PrepareAssetsTest(unittest.TestCase):
             calls: list[list[str]] = []
 
             def fake_download(_wh, packages, **kwargs):
-                calls.append((list(packages), kwargs.get("strict", False)))
+                calls.append(
+                    (
+                        list(packages),
+                        kwargs.get("strict", False),
+                        {
+                            "extra_index_urls": kwargs.get("extra_index_urls"),
+                            "wheels_only": kwargs.get("wheels_only", False),
+                        },
+                    )
+                )
 
             with mock.patch(
                 "prepare_handlers_wheelhouse.download_deps", side_effect=fake_download
@@ -179,10 +188,24 @@ class PrepareAssetsTest(unittest.TestCase):
                     with_large_deps=True,
                 )
             self.assertEqual(ordered, ["acme-widget"])
-            self.assertEqual(calls[0], (["acme-widget==0.0.1"], False))
+            self.assertEqual(
+                calls[0],
+                (
+                    ["acme-widget==0.0.1"],
+                    True,
+                    {"extra_index_urls": ["https://pypi.org/simple"], "wheels_only": False},
+                ),
+            )
             self.assertEqual(
                 calls[1],
-                (["acme-widget[large-dependencies]==0.0.1"], True),
+                (
+                    ["acme-widget[large-dependencies]==0.0.1"],
+                    True,
+                    {
+                        "extra_index_urls": ["https://pypi.org/simple"],
+                        "wheels_only": True,
+                    },
+                ),
             )
 
 

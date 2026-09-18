@@ -434,23 +434,29 @@ def download_deps(
     python_version: str = "3.12",
     strict: bool = False,
     extra_index_urls: list[str] | None = None,
+    wheels_only: bool = False,
 ) -> None:
     """Download transitive deps into wheelhouse so Docker can use --no-index.
 
     Defaults to Lambda's linux/amd64 tags so a Windows host does not poison the
     wheelhouse with win_amd64 wheels.
 
-    When ``strict`` is True (used for ``--with-large-deps``), any pip failure
-    raises instead of warning and continuing with an incomplete wheelhouse.
+    When ``strict`` is True, any pip failure raises instead of warning and
+    continuing with an incomplete wheelhouse.
 
     ``extra_index_urls`` (e.g. PyPI) helps when CodeArtifact does not mirror
-    heavy public wheels like recent numpy/tensorflow.
+    public wheels (boto3, numpy, tensorflow, …).
+
+    ``wheels_only`` uses ``--only-binary=:all:`` (for heavy ECS extras). The
+    default pass prefers wheels but allows sdists so BOM sdists in the
+    wheelhouse still resolve (e.g. ``renglo-lib`` source + PyPI deps).
     """
     if not packages:
         return
     print(
         f"pip download deps for: {', '.join(packages)} "
-        f"(platform={platform}, python={python_version})"
+        f"(platform={platform}, python={python_version}, "
+        f"wheels_only={wheels_only}, strict={strict})"
     )
     abi = f"cp{python_version.replace('.', '')}"
     base = [
@@ -470,8 +476,11 @@ def download_deps(
         "cp",
         "--abi",
         abi,
-        "--only-binary=:all:",
     ]
+    if wheels_only:
+        base.append("--only-binary=:all:")
+    else:
+        base.append("--prefer-binary")
     for url in extra_index_urls or []:
         base.extend(["--extra-index-url", url])
     try:
@@ -551,7 +560,14 @@ def prepare(
         raise ValueError("no packages to prepare; pass --from-monorepo and/or --packages")
 
     if not skip_deps:
-        download_deps(wheelhouse, pin_specs(ordered, wheelhouse))
+        # renglo-lib and extension sdists live in the wheelhouse; pull transitive
+        # deps (boto3, Flask, …) from PyPI/CodeArtifact for offline Docker install.
+        download_deps(
+            wheelhouse,
+            pin_specs(ordered, wheelhouse),
+            strict=True,
+            extra_index_urls=["https://pypi.org/simple"],
+        )
         if with_large_deps:
             extras = large_extra_specs(ordered, wheelhouse)
             if extras:
@@ -562,6 +578,7 @@ def prepare(
                     extras,
                     strict=True,
                     extra_index_urls=["https://pypi.org/simple"],
+                    wheels_only=True,
                 )
             else:
                 print(

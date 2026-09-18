@@ -20,6 +20,7 @@ if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
 from peers import handlers_unit_name  # noqa: E402
+from prepare_handlers_wheelhouse import pin_specs  # noqa: E402
 
 
 def _run(cmd: list[str], *, cwd: Path | None = None, env: dict[str, str] | None = None) -> None:
@@ -67,6 +68,8 @@ def cmd_build(args: argparse.Namespace) -> int:
     if not packages:
         print("ERROR: --packages is required", file=sys.stderr)
         return 1
+    install_specs = pin_specs(packages, wheelhouse)
+    print(f"pip install specs: {', '.join(install_specs)}")
     platform = "linux/arm64" if args.local else "linux/amd64"
     tag_suffix = "local" if args.local else "latest"
     kind = "ecs-builder" if args.large else "lambda-builder"
@@ -78,7 +81,9 @@ def cmd_build(args: argparse.Namespace) -> int:
         build_dir = Path(raw)
         shutil.copytree(wheelhouse, build_dir / "wheelhouse")
         shutil.copytree(assets, build_dir / "handlers-assets")
-        (build_dir / "packages.txt").write_text("\n".join(packages) + "\n", encoding="utf-8")
+        (build_dir / "packages.txt").write_text(
+            "\n".join(install_specs) + "\n", encoding="utf-8"
+        )
         entry = _SCRIPTS / "ecs_handler_entrypoint.py"
         if args.large:
             if not entry.is_file():
