@@ -23,7 +23,15 @@ from prepare_handlers_wheelhouse import (  # noqa: E402
 )
 
 
-def _write_sdist(dest: Path, dist: str, version: str, *, router: bool, config: dict | None) -> Path:
+def _write_sdist(
+    dest: Path,
+    dist: str,
+    version: str,
+    *,
+    router: bool,
+    config: dict | None,
+    large_extra: bool = False,
+) -> Path:
     """Create a minimal sdist tarball under dest."""
     # PEP 625-ish filename: name-version.tar.gz (underscores ok in archive name)
     file_name = f"{dist.replace('-', '_')}-{version}.tar.gz"
@@ -38,7 +46,13 @@ def _write_sdist(dest: Path, dist: str, version: str, *, router: bool, config: d
             info.size = len(data)
             tf.addfile(info, io.BytesIO(data))
 
-        _add("pyproject.toml", b'[project]\nname = "x"\n')
+        pyproject = '[project]\nname = "x"\n'
+        if large_extra:
+            pyproject += (
+                "[project.optional-dependencies]\n"
+                'large-dependencies = ["numpy"]\n'
+            )
+        _add("pyproject.toml", pyproject.encode())
         if router:
             _add("lambda_router.py", b"# router\n")
         if config is not None:
@@ -110,6 +124,29 @@ class PrepareAssetsTest(unittest.TestCase):
                 ["acme-widget[large-dependencies]==0.0.5"],
             )
 
+    def test_large_extra_specs_skips_packages_without_extra(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            wheelhouse = Path(raw)
+            _write_sdist(
+                wheelhouse,
+                "renglo-lib",
+                "0.0.4rc1",
+                router=False,
+                config=None,
+            )
+            _write_sdist(
+                wheelhouse,
+                "arbitium-lab",
+                "0.0.6rc2",
+                router=True,
+                config={"handlers": {}},
+                large_extra=True,
+            )
+            self.assertEqual(
+                large_extra_specs(["renglo-lib", "arbitium-lab"], wheelhouse),
+                ["arbitium-lab[large-dependencies]==0.0.6rc2"],
+            )
+
     def test_prepare_with_large_deps_calls_download(self) -> None:
         import unittest.mock as mock
 
@@ -123,6 +160,7 @@ class PrepareAssetsTest(unittest.TestCase):
                 "0.0.1",
                 router=True,
                 config={"handlers": {}},
+                large_extra=True,
             )
             calls: list[list[str]] = []
 

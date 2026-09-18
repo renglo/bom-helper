@@ -42,6 +42,29 @@ class LauncherConfigTests(unittest.TestCase):
             self.assertEqual(resolved["env_name"], "acme0813")
             self.assertEqual(resolved["bom_repo"], "Org/acme-bom")
             self.assertEqual(resolved["bom_checkout"], "acme-bom")
+            self.assertEqual(resolved["github_owner_id"], "")
+            self.assertEqual(resolved["github_repo_id"], "")
+
+    def test_resolve_from_launcher_reads_github_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            helper = root / "bom-helper"
+            launcher = root / "launcher" / "cdk"
+            launcher.mkdir(parents=True)
+            (launcher / "customer-config.json").write_text(
+                json.dumps(
+                    {
+                        "env_name": "acme0813",
+                        "github_repo": "Org/acme-bom",
+                        "github_owner_id": "111",
+                        "github_repo_id": "222",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            resolved = launcher_config.resolve_from_launcher(helper)
+            self.assertEqual(resolved["github_owner_id"], "111")
+            self.assertEqual(resolved["github_repo_id"], "222")
 
 
 class PeerDeployContextTests(unittest.TestCase):

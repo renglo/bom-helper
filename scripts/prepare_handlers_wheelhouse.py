@@ -242,6 +242,100 @@ def extract_assets(wheelhouse: Path, assets_dir: Path, packages: list[str]) -> N
 LARGE_EXTRA = "large-dependencies"
 
 
+def _extras_from_pyproject_text(text: str) -> set[str] | None:
+    try:
+        data = tomllib.loads(text)
+    except Exception:
+        return None
+    optional = (data.get("project") or {}).get("optional-dependencies") or {}
+    return {str(name).strip() for name in optional if str(name).strip()}
+
+
+def _extras_from_pkg_info_text(text: str) -> set[str]:
+    found: set[str] = set()
+    for line in text.splitlines():
+        if line.lower().startswith("provides-extra:"):
+            extra = line.split(":", 1)[1].strip()
+            if extra:
+                found.add(extra)
+    return found
+
+
+def extras_declared_in_artifact(path: Path) -> set[str] | None:
+    """Return extras named in a wheel/sdist, or None if metadata cannot be read."""
+    name = path.name
+    if name.endswith(".whl"):
+        try:
+            with zipfile.ZipFile(path) as zf:
+                meta_names = [
+                    n
+                    for n in zf.namelist()
+                    if n.endswith(".dist-info/METADATA") and n.count("/") == 1
+                ]
+                if not meta_names:
+                    return None
+                text = zf.read(meta_names[0]).decode("utf-8", errors="replace")
+            return _extras_from_pkg_info_text(text)
+        except (OSError, zipfile.BadZipFile):
+            return None
+    if name.endswith(".tar.gz") or name.endswith(".zip"):
+        try:
+            if name.endswith(".tar.gz"):
+                texts = {}
+                with tarfile.open(path, "r:gz") as tf:
+                    for member in tf.getmembers():
+                        leaf = member.name.rsplit("/", 1)[-1]
+                        if (
+                            not member.isfile()
+                            or member.name.count("/") != 1
+                            or leaf not in {"pyproject.toml", "PKG-INFO"}
+                        ):
+                            continue
+                        handle = tf.extractfile(member)
+                        if handle is None:
+                            continue
+                        texts[leaf] = handle.read().decode("utf-8", errors="replace")
+            else:
+                with zipfile.ZipFile(path) as zf:
+                    texts = {
+                        n.rsplit("/", 1)[-1]: zf.read(n).decode("utf-8", errors="replace")
+                        for n in zf.namelist()
+                        if n.count("/") == 1
+                        and n.rsplit("/", 1)[-1] in {"pyproject.toml", "PKG-INFO"}
+                    }
+        except (OSError, tarfile.TarError, zipfile.BadZipFile):
+            return None
+        if "pyproject.toml" in texts:
+            parsed = _extras_from_pyproject_text(texts["pyproject.toml"])
+            if parsed is not None:
+                return parsed
+        if "PKG-INFO" in texts:
+            return _extras_from_pkg_info_text(texts["PKG-INFO"])
+        return None
+    return None
+
+
+def package_declares_extra(
+    wheelhouse: Path, dist_name: str, extra: str = LARGE_EXTRA
+) -> bool | None:
+    """True/False when metadata is readable; None if artifacts cannot be inspected."""
+    artifacts = _find_artifacts(wheelhouse, dist_name)
+    if not artifacts:
+        return None
+    want = extra.strip().lower()
+    saw_metadata = False
+    for path in artifacts:
+        declared = extras_declared_in_artifact(path)
+        if declared is None:
+            continue
+        saw_metadata = True
+        if any(name.lower() == want for name in declared):
+            return True
+    if saw_metadata:
+        return False
+    return None
+
+
 def _artifact_version(path: Path) -> str | None:
     """Best-effort version from a wheel or sdist filename."""
     if path.suffix == ".whl":
@@ -305,8 +399,31 @@ def pin_specs(
 def large_extra_specs(
     packages: list[str], wheelhouse: Path | None = None
 ) -> list[str]:
-    """Return ``name[large-dependencies]==ver`` specs for pip download/install."""
-    return pin_specs(packages, wheelhouse, extra=LARGE_EXTRA)
+    """Return ``name[large-dependencies]==ver`` specs for packages that declare the extra.
+
+    ``renglo-lib`` and most handler dists have no ``[large-dependencies]`` extra.
+    Pip download of ``name[extra]==ver`` is strict in CI and fails for those pins.
+    Unreadable artifacts are still requested so a missing extra is a pip error
+    rather than a silent skip of the only heavy package.
+    """
+    names: list[str] = []
+    skipped: list[str] = []
+    for name in packages:
+        base = name.strip()
+        if not base:
+            continue
+        if "[" in base and base.endswith("]"):
+            base = base.split("[", 1)[0].strip()
+        if wheelhouse is not None and package_declares_extra(wheelhouse, base) is False:
+            skipped.append(base)
+            continue
+        names.append(base)
+    for base in skipped:
+        print(
+            f"skip [{LARGE_EXTRA}] for {base} (extra not declared in wheelhouse artifact)",
+            file=sys.stderr,
+        )
+    return pin_specs(names, wheelhouse, extra=LARGE_EXTRA)
 
 
 def download_deps(
@@ -437,14 +554,20 @@ def prepare(
         download_deps(wheelhouse, pin_specs(ordered, wheelhouse))
         if with_large_deps:
             extras = large_extra_specs(ordered, wheelhouse)
-            print(f"pip download [{LARGE_EXTRA}] for: {', '.join(extras)}")
-            # CodeArtifact often lags public ML wheels (numpy>=2.3, tensorflow, …).
-            download_deps(
-                wheelhouse,
-                extras,
-                strict=True,
-                extra_index_urls=["https://pypi.org/simple"],
-            )
+            if extras:
+                print(f"pip download [{LARGE_EXTRA}] for: {', '.join(extras)}")
+                # CodeArtifact often lags public ML wheels (numpy>=2.3, tensorflow, …).
+                download_deps(
+                    wheelhouse,
+                    extras,
+                    strict=True,
+                    extra_index_urls=["https://pypi.org/simple"],
+                )
+            else:
+                print(
+                    f"no packages declare [{LARGE_EXTRA}]; skipping extra pip download",
+                    file=sys.stderr,
+                )
 
     extract_assets(wheelhouse, assets_dir, ordered)
 

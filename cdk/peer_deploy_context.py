@@ -111,4 +111,6 @@ def resolve_peer_deploy_context(
         "bom_repo": bom_repo,
         "bom_checkout": bom_checkout,
         "targets_path": str(targets_path),
+        "github_owner_id": launcher.get("github_owner_id", ""),
+        "github_repo_id": launcher.get("github_repo_id", ""),
     }

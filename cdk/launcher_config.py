@@ -50,4 +50,6 @@ def resolve_from_launcher(helper_root: Path) -> dict[str, str]:
         "env_name": env_name,
         "bom_repo": github_repo,
         "bom_checkout": bom_checkout,
+        "github_owner_id": str(cfg.get("github_owner_id", "")).strip(),
+        "github_repo_id": str(cfg.get("github_repo_id", "")).strip(),
     }
