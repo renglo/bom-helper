@@ -438,27 +438,28 @@ def download_deps(
 ) -> None:
     """Download transitive deps into wheelhouse so Docker can use --no-index.
 
-    Defaults to Lambda's linux/amd64 tags so a Windows host does not poison the
-    wheelhouse with win_amd64 wheels.
+    Default pass (``wheels_only=False``): host-native download with
+    ``--prefer-binary``. Resolves BOM sdists already in the wheelhouse and pulls
+    transitive deps (boto3, Flask, …). Peer/handler CI runs on linux/amd64,
+    matching Lambda.
+
+    ``wheels_only=True`` (ECS ``[large-dependencies]``): cross-platform
+    ``--only-binary=:all:`` with ``--platform`` / ``--python-version`` tags.
+    Pip requires wheels-only when platform pins are set and deps are resolved.
 
     When ``strict`` is True, any pip failure raises instead of warning and
     continuing with an incomplete wheelhouse.
 
     ``extra_index_urls`` (e.g. PyPI) helps when CodeArtifact does not mirror
     public wheels (boto3, numpy, tensorflow, …).
-
-    ``wheels_only`` uses ``--only-binary=:all:`` (for heavy ECS extras). The
-    default pass prefers wheels but allows sdists so BOM sdists in the
-    wheelhouse still resolve (e.g. ``renglo-lib`` source + PyPI deps).
     """
     if not packages:
         return
+    mode = "cross-platform wheels" if wheels_only else "host-native"
     print(
         f"pip download deps for: {', '.join(packages)} "
-        f"(platform={platform}, python={python_version}, "
-        f"wheels_only={wheels_only}, strict={strict})"
+        f"({mode}, strict={strict})"
     )
-    abi = f"cp{python_version.replace('.', '')}"
     base = [
         sys.executable,
         "-m",
@@ -468,17 +469,22 @@ def download_deps(
         str(wheelhouse),
         "--find-links",
         str(wheelhouse),
-        "--platform",
-        platform,
-        "--python-version",
-        python_version,
-        "--implementation",
-        "cp",
-        "--abi",
-        abi,
     ]
     if wheels_only:
-        base.append("--only-binary=:all:")
+        abi = f"cp{python_version.replace('.', '')}"
+        base.extend(
+            [
+                "--platform",
+                platform,
+                "--python-version",
+                python_version,
+                "--implementation",
+                "cp",
+                "--abi",
+                abi,
+                "--only-binary=:all:",
+            ]
+        )
     else:
         base.append("--prefer-binary")
     for url in extra_index_urls or []:
