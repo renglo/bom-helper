@@ -95,7 +95,8 @@ Put each kind of change in exactly one place. If it is not in this table, it is 
 | Which handlers are heavy (ECS) vs light (zip)             | `extensions/<handle>/package/handlers_config.json`                                       | `ecs_handlers`                                                                        |
 | Membership list `EXTERNAL_HANDLERS`                       | **Do not hand-edit.** Union of `peers.*.extensions` (CI overlay `--targets`)             | `ops/bom-helper/scripts/peers.py`                                                     |
 | Dual-run overlay (ECS handler names, FE URL)              | `platform_env.yml`                                                                       | `EXTERNAL_HANDLERS_ECS_HANDLERS`, etc.                                                |
-| Handle → Lambda ARN / ECS cluster (runtime)               | SSM `/{env}/bootstrap/peer-routes` and `platform-vars/*/VARS.EXTERNAL_HANDLERS_PEER_MAP` | `python scripts/write_peer_routes.py …`                                               |
+| Handle → Lambda ARN / ECS cluster (runtime)               | SSM `/{env}/bootstrap/peer-routes` (not Lambda env, not platform-vars)                   | `python scripts/write_peer_routes.py …`                                               |
+| Peer Lambda runtime env (tables, `WL_NAME`, secrets)      | SSM `/{env}/bootstrap/deploy-input` + packager                                           | `peer_packager.py publish --env-json`; tables are always `{env}_*`                    |
 | Laptop routing                                            | `dev/renglo-api/env_config.py`                                                           | `EXTERNAL_HANDLERS_PEER_MAP`, `EXTERNAL_HANDLERS_PEER_ROUTING`                        |
 | First-time AWS stack (IAM, Lambda seed, ECS)              | laptop / admin                                                                           | `bash setup-venv.sh`, then `cdk synth` + `cdk deploy` from `bom-helper/cdk` (see §1d) |
 | Zip + ECS **image** after the stack exists                | GitHub Actions                                                                           | `.github/workflows/deploy_peers.yml`                                                  |
@@ -267,7 +268,7 @@ python ../bom-helper/scripts/write_peer_routes.py deploy_targets.yml \
 
 Region defaults to `us-east-1`; account is read from the active AWS profile when `--account` is omitted.
 
-That **merges** SSM `/{env_id}/bootstrap/peer-routes` and `EXTERNAL_HANDLERS_PEER_MAP` in platform-vars. Unmapped handles still use overflow `{env_id}-handlers`.
+That writes SSM `/{env_id}/bootstrap/peer-routes`. Unmapped handles still use overflow `{env_id}-handlers`.
 
 Laptop cutover for one handle (optional): `dev/renglo-api/env_config.py`
 
@@ -334,10 +335,11 @@ python ../bom-helper/scripts/peer_packager.py build \
 
 python ../bom-helper/scripts/peer_packager.py publish \
   --env-name "$ENV" --peer-id "$PEER_ID" \
-  --zip ".peer-build/${PEER_ID}/lambda_deployment.zip"
+  --zip ".peer-build/${PEER_ID}/lambda_deployment.zip" \
+  --env-json lambda_env_merge.json
 ```
 
-Publish updates zip **and** sets Handler to `lambda_router.lambda_handler` (CDK seed is `index.handler` because inline ZipFile is always `index.py`).
+Publish updates zip, sets Handler to `lambda_router.lambda_handler` (CDK seed is `index.handler` because inline ZipFile is always `index.py`), and applies filtered SSM deploy-input env. Table names and `WL_NAME` always come from `--env-name` (`{env}_entities`, `{env}_data`, …). Overflow identity keys (`LAMBDA_FUNCTION_NAME`, ECS cluster, …) are not copied onto the peer.
 
 Add `--large` on `build` and `peer_packager.py push` when `compute` is `fargate` or `ec2`.
 

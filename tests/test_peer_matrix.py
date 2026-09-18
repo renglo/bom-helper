@@ -54,6 +54,7 @@ class PeerMatrixTests(unittest.TestCase):
         self.assertEqual(lab["compute"], "fargate")
         self.assertTrue(lab["handlers_bom_file"].endswith("peers_bom/lab/v0.1.3.json"))
         self.assertIn("lab-staging", lab["oidc_role_arn"])
+        self.assertEqual(lab["ssm_parameter"], "/acme0813/bootstrap/deploy-input")
         json.dumps({"include": rows})
 
 

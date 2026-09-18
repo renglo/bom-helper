@@ -8,7 +8,15 @@ compute_type values: "lambda_only" | "fargate" | "ec2"
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
 from typing import Any
+
+_SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+
+from lambda_env import peer_base_env  # noqa: E402
 
 from aws_cdk import (
     CfnCondition,
@@ -71,6 +79,11 @@ def handlers_unit_name(env_name: str, peer_id: str | None = None) -> str:
 
 def handlers_lambda_function_name(env_name: str, peer_id: str | None = None) -> str:
     return handlers_unit_name(env_name, peer_id)
+
+
+def handlers_lambda_environment(env_name: str) -> aws_lambda_.CfnFunction.EnvironmentProperty:
+    """WL_NAME + `{env}_*` DynamoDB tables. Overflow identity stays off peers."""
+    return aws_lambda_.CfnFunction.EnvironmentProperty(variables=peer_base_env(env_name))
 
 
 def handlers_policy_name(env_name: str, peer_id: str | None = None) -> str:
@@ -597,6 +610,7 @@ class ComputeStack(Construct):
             timeout=900,
             memory_size=512,
             description=DESCRIPTION,
+            environment=handlers_lambda_environment(env_name),
         )
         handlers_fn.add_dependency(handlers_lambda_role.node.default_child)  # type: ignore[arg-type]
         handlers_fn.cfn_options.deletion_policy = CfnDeletionPolicy.DELETE
@@ -823,6 +837,7 @@ class ComputeStack(Construct):
             timeout=900,
             memory_size=512,
             description=DESCRIPTION,
+            environment=handlers_lambda_environment(env_name),
         )
         handlers_fn.add_dependency(handlers_lambda_role.node.default_child)  # type: ignore[arg-type]
         handlers_fn.cfn_options.deletion_policy = CfnDeletionPolicy.DELETE

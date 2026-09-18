@@ -52,6 +52,26 @@ HANDLERS_ONLY_ENV_KEYS = frozenset(
     }
 )
 
+# Overflow singleton identity — do not copy onto a peer Lambda (peer-routes owns routing).
+OVERFLOW_IDENTITY_ENV_KEYS = frozenset(
+    {
+        "LAMBDA_EXTERNAL_HANDLERS_ARN",
+        "LAMBDA_HANDLERS_FUNCTION_NAME",
+        "LAMBDA_FUNCTION_NAME",
+        "LAMBDA_ALIAS",
+        "ECS_CLUSTER",
+        "ECS_TASK_DEFINITION",
+        "ECS_RESULTS_BUCKET",
+        "ECS_LAUNCH_TYPE",
+        "ECS_NETWORK_MODE",
+        "ECS_VPC",
+        "ECS_SUBNETS",
+        "ECS_SECURITY_GROUPS",
+    }
+)
+
+CRITICAL_HANDLER_ENV_KEYS = ("DYNAMODB_RINGDATA_TABLE", "DYNAMODB_ENTITY_TABLE")
+
 
 def is_reserved_env_key(key: str) -> bool:
     k = key.strip()
@@ -99,6 +119,63 @@ def filter_lambda_env(
     if log and skipped:
         print(f"Skipping {len(skipped)} non-runtime Lambda env key(s): {', '.join(skipped)}", file=sys.stderr)
     return out
+
+
+def tenant_dynamodb_vars(env_name: str) -> dict[str, str]:
+    """Table names are `{env}_*` — same mapping as bootstrap config_builder."""
+    prefix = env_name.strip()
+    return {
+        "DYNAMODB_ENTITY_TABLE": f"{prefix}_entities",
+        "DYNAMODB_BLUEPRINT_TABLE": f"{prefix}_blueprints",
+        "DYNAMODB_RINGDATA_TABLE": f"{prefix}_data",
+        "DYNAMODB_REL_TABLE": f"{prefix}_rel",
+        "DYNAMODB_CHAT_TABLE": f"{prefix}_chat",
+        "DYNAMODB_SESSION_TABLE": f"{prefix}_session",
+        "DYNAMODB_SEARCH_TABLE": f"{prefix}_search",
+        "DYNAMODB_GRAPH_TABLE": f"{prefix}_graph",
+    }
+
+
+def peer_base_env(env_name: str) -> dict[str, str]:
+    return {"WL_NAME": env_name.strip(), **tenant_dynamodb_vars(env_name)}
+
+
+def filter_peer_lambda_env(source: dict[str, str], *, log: bool = False) -> dict[str, str]:
+    """Runtime env for a peer Lambda: no console/CI/reserved keys, no overflow identity."""
+    filtered = filter_lambda_env(source, log=log)
+    out: dict[str, str] = {}
+    skipped: list[str] = []
+    for key, value in filtered.items():
+        if key in OVERFLOW_IDENTITY_ENV_KEYS:
+            skipped.append(key)
+            continue
+        out[key] = value
+    if log and skipped:
+        print(
+            f"Skipping {len(skipped)} overflow identity key(s): {', '.join(skipped)}",
+            file=sys.stderr,
+        )
+    return out
+
+
+def merge_peer_lambda_env(
+    env_name: str,
+    extra: dict[str, str] | None = None,
+    *,
+    log: bool = False,
+) -> dict[str, str]:
+    """SSM deploy-input (filtered) plus deterministic table names / WL_NAME."""
+    merged = filter_peer_lambda_env(extra or {}, log=log)
+    merged.update(peer_base_env(env_name))
+    missing = [k for k in CRITICAL_HANDLER_ENV_KEYS if not merged.get(k)]
+    if missing:
+        raise RuntimeError(
+            "peer Lambda env missing "
+            + ", ".join(missing)
+            + f" (env_name={env_name!r})"
+        )
+    assert_under_lambda_limit(merged)
+    return merged
 
 
 def assert_under_lambda_limit(env: dict[str, str], *, limit: int = LAMBDA_ENV_MAX_BYTES) -> int:

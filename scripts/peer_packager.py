@@ -8,6 +8,7 @@ Does not use extensions-service ``run.py``. Resource names follow
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -19,6 +20,7 @@ _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
+from lambda_env import merge_peer_lambda_env  # noqa: E402
 from peers import handlers_unit_name  # noqa: E402
 from prepare_handlers_wheelhouse import pin_specs  # noqa: E402
 
@@ -27,9 +29,36 @@ from prepare_handlers_wheelhouse import pin_specs  # noqa: E402
 LAMBDA_HANDLER = "lambda_router.lambda_handler"
 
 
+def _load_env_json(path: str) -> dict[str, str]:
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"--env-json must be a JSON object: {path}")
+    out: dict[str, str] = {}
+    for key, value in data.items():
+        if value is None:
+            continue
+        out[str(key).strip()] = str(value)
+    return out
+
+
 def _run(cmd: list[str], *, cwd: Path | None = None, env: dict[str, str] | None = None) -> None:
     print("+", " ".join(cmd))
     subprocess.run(cmd, check=True, cwd=cwd, env=env)
+
+
+def _wait_function_updated(unit: str, region: str) -> None:
+    _run(
+        [
+            "aws",
+            "lambda",
+            "wait",
+            "function-updated",
+            "--function-name",
+            unit,
+            "--region",
+            region,
+        ]
+    )
 
 
 def _dockerfile(*, large: bool) -> str:
@@ -155,32 +184,46 @@ def cmd_publish(args: argparse.Namespace) -> int:
             region,
         ]
     )
-    _run(
-        [
-            "aws",
-            "lambda",
-            "wait",
-            "function-updated",
-            "--function-name",
-            unit,
-            "--region",
-            region,
-        ]
+    _wait_function_updated(unit, region)
+    extra: dict[str, str] = {}
+    env_json = str(getattr(args, "env_json", "") or "").strip()
+    if env_json:
+        extra = _load_env_json(env_json)
+    try:
+        runtime_env = merge_peer_lambda_env(args.env_name, extra, log=True)
+    except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
+        print(f"ERROR: peer Lambda env: {exc}", file=sys.stderr)
+        return 1
+
+    with tempfile.TemporaryDirectory(prefix="peer-publish-") as raw:
+        cfg_path = Path(raw) / "update-config.json"
+        cfg_path.write_text(
+            json.dumps(
+                {
+                    "FunctionName": unit,
+                    "Handler": LAMBDA_HANDLER,
+                    "Environment": {"Variables": runtime_env},
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        _run(
+            [
+                "aws",
+                "lambda",
+                "update-function-configuration",
+                "--cli-input-json",
+                f"file://{cfg_path}",
+                "--region",
+                region,
+            ]
+        )
+    _wait_function_updated(unit, region)
+    print(
+        f"Published {unit} handler={LAMBDA_HANDLER} "
+        f"env={len(runtime_env)} keys"
     )
-    _run(
-        [
-            "aws",
-            "lambda",
-            "update-function-configuration",
-            "--function-name",
-            unit,
-            "--handler",
-            LAMBDA_HANDLER,
-            "--region",
-            region,
-        ]
-    )
-    print(f"Published {unit} handler={LAMBDA_HANDLER}")
     return 0
 
 
@@ -233,6 +276,11 @@ def main() -> int:
     add_identity(p)
     p.add_argument("--zip", required=True)
     p.add_argument("--region", default="")
+    p.add_argument(
+        "--env-json",
+        default="",
+        help="SSM deploy-input VARS/SECRETS JSON; table names always come from --env-name",
+    )
 
     u = sub.add_parser("push", help="Tag/push ECS image to the peer ECR repo")
     add_identity(u)
