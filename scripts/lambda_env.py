@@ -44,9 +44,13 @@ CI_ONLY_ENV_KEYS = frozenset(
     }
 )
 CONSOLE_ONLY_ENV_PREFIXES = ("VITE_", "AMPLIFY_")
-# Huge routing maps belong on handlers deploy_input / package handlers_config,
-# not on the backend Lambda 4KB environment.
-HANDLERS_ONLY_ENV_KEYS = frozenset({"EXTERNAL_HANDLERS_ECS_HANDLERS"})
+# Routing catalogs and maps belong in SSM / extension packages, not Lambda env.
+HANDLERS_ONLY_ENV_KEYS = frozenset(
+    {
+        "EXTERNAL_HANDLERS_ECS_HANDLERS",
+        "EXTERNAL_HANDLERS_PEER_MAP",
+    }
+)
 
 
 def is_reserved_env_key(key: str) -> bool:

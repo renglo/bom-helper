@@ -85,7 +85,10 @@ def _put_ssm(name: str, payload: dict[str, Any], region: str, *, dry_run: bool) 
     print(f"wrote {name}")
 
 
-def _merge_platform_vars(path: str, peer_map_json: str, region: str, *, dry_run: bool) -> None:
+def _strip_legacy_peer_map_from_platform_vars(
+    path: str, region: str, *, dry_run: bool
+) -> None:
+    """Remove inlined peer map from platform-vars (canonical store is peer-routes SSM)."""
     import boto3
     from botocore.exceptions import ClientError
 
@@ -96,15 +99,17 @@ def _merge_platform_vars(path: str, peer_map_json: str, region: str, *, dry_run:
     except ClientError as exc:
         code = str((exc.response or {}).get("Error", {}).get("Code") or "")
         if code in {"ParameterNotFound", "ResourceNotFoundException"}:
-            print(f"skip merge {path} (missing)")
+            print(f"skip cleanup {path} (missing)")
             return
         raise
-    vars_block = data.setdefault("VARS", {})
+    vars_block = data.get("VARS")
     if not isinstance(vars_block, dict):
-        vars_block = {}
-        data["VARS"] = vars_block
-    vars_block["EXTERNAL_HANDLERS_PEER_MAP"] = peer_map_json
+        return
+    if "EXTERNAL_HANDLERS_PEER_MAP" not in vars_block:
+        return
+    del vars_block["EXTERNAL_HANDLERS_PEER_MAP"]
     _put_ssm(path, data, region, dry_run=dry_run)
+    print(f"removed legacy EXTERNAL_HANDLERS_PEER_MAP from {path}")
 
 
 def main() -> int:
@@ -160,11 +165,9 @@ def main() -> int:
 
     routes_path = f"/{args.env_name}/bootstrap/peer-routes"
     _put_ssm(routes_path, {"routes": merged}, args.region, dry_run=args.dry_run)
-    peer_json = json.dumps(merged, separators=(",", ":"), sort_keys=True) if merged else ""
     for stage in ("staging", "production"):
-        _merge_platform_vars(
+        _strip_legacy_peer_map_from_platform_vars(
             f"/{args.env_name}/bootstrap/platform-vars/{stage}",
-            peer_json,
             args.region,
             dry_run=args.dry_run,
         )

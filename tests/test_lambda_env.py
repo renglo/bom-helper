@@ -32,6 +32,7 @@ class LambdaEnvTests(unittest.TestCase):
                 "LAMBDA_BACKEND_ARN": "arn:aws:lambda:...",
                 "OPENAI_API_KEY": "sk-test",
                 "EXTERNAL_HANDLERS_ECS_HANDLERS": "acmewidget:aws_threats;acmeextra:aws_aid_networks",
+                "EXTERNAL_HANDLERS_PEER_MAP": '{"acmewidget":{"lambda_arn":"arn:..."}}',
                 "bad-key": "nope",
             }
         )
