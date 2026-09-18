@@ -14,6 +14,7 @@ Stack name: ``{env}-peer-{peerId}``.
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -56,6 +57,7 @@ class HandlersPeerStack(Stack):
         aws_account: str,
         aws_region: str,
         enable_staging: bool,
+        package_registry: dict | None = None,
         **kwargs,
     ) -> None:
         super().__init__(scope, stack_id, **kwargs)
@@ -77,6 +79,7 @@ class HandlersPeerStack(Stack):
             github_handlers_owner_id=github_handlers_owner_id,
             github_handlers_repo_id=github_handlers_repo_id,
             enable_staging=enable_staging,
+            package_registry=package_registry,
             tenant_policy=iam.ManagedPolicy.from_managed_policy_name(
                 self,
                 "ImportedTenantPolicy",
@@ -122,6 +125,13 @@ def main() -> None:
     if not selected:
         raise SystemExit(f"peer_id {want_peer!r} not in catalog")
 
+    package_registry = None
+    raw_registry = ctx.get("package_registry_json") or ""
+    if raw_registry.strip():
+        parsed = json.loads(raw_registry)
+        if isinstance(parsed, dict):
+            package_registry = parsed
+
     for peer in selected:
         region = str(peer.get("aws_region") or aws_region)
         peer_env = Environment(account=aws_account, region=region)
@@ -139,6 +149,7 @@ def main() -> None:
             aws_account=aws_account,
             aws_region=region,
             enable_staging=enable_staging,
+            package_registry=package_registry,
         )
 
     app.synth()

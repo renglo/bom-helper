@@ -44,6 +44,7 @@ class LauncherConfigTests(unittest.TestCase):
             self.assertEqual(resolved["bom_checkout"], "acme-bom")
             self.assertEqual(resolved["github_owner_id"], "")
             self.assertEqual(resolved["github_repo_id"], "")
+            self.assertEqual(resolved["package_registry_json"], "")
 
     def test_resolve_from_launcher_reads_github_ids(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -65,6 +66,28 @@ class LauncherConfigTests(unittest.TestCase):
             resolved = launcher_config.resolve_from_launcher(helper)
             self.assertEqual(resolved["github_owner_id"], "111")
             self.assertEqual(resolved["github_repo_id"], "222")
+
+    def test_resolve_from_launcher_reads_package_registry(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            helper = root / "bom-helper"
+            launcher = root / "launcher" / "cdk"
+            launcher.mkdir(parents=True)
+            (launcher / "customer-config.json").write_text(
+                json.dumps(
+                    {
+                        "env_name": "acme0813",
+                        "github_repo": "Org/acme-bom",
+                        "package_registry": {"domain_owners": ["444455556666"]},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            resolved = launcher_config.resolve_from_launcher(helper)
+            self.assertEqual(
+                json.loads(resolved["package_registry_json"]),
+                {"domain_owners": ["444455556666"]},
+            )
 
 
 class PeerDeployContextTests(unittest.TestCase):

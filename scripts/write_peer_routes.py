@@ -23,6 +23,19 @@ if str(_SCRIPTS) not in sys.path:
 from peers import load_peers, peer_stack_name  # noqa: E402
 
 
+def _output(outputs: dict[str, str], logical: str) -> str:
+    """Read a CDK output by logical id (exact or nested ``Compute…<id><hash>``)."""
+    direct = (outputs.get(logical) or "").strip()
+    if direct:
+        return direct
+    matches = [
+        str(val).strip()
+        for key, val in outputs.items()
+        if logical in key and str(val).strip()
+    ]
+    return matches[0] if matches else ""
+
+
 def _cfn_outputs(stack_name: str, region: str) -> dict[str, str]:
     import boto3
     from botocore.exceptions import ClientError
@@ -49,15 +62,15 @@ def _route_from_outputs(
     region: str,
     account: str,
 ) -> dict[str, Any]:
-    fn = (outputs.get("HandlersLambdaFunctionName") or "").strip()
+    fn = _output(outputs, "HandlersLambdaFunctionName")
     if not fn:
         return {}
     route = {
         "lambda_function_name": fn,
         "lambda_arn": f"arn:aws:lambda:{region}:{account}:function:{fn}",
-        "ecs_cluster": (outputs.get("HandlersEcsClusterName") or "").strip(),
-        "ecs_task_definition": (outputs.get("HandlersTaskFamily") or "").strip(),
-        "ecs_results_bucket": (outputs.get("HandlersResultsBucketName") or "").strip(),
+        "ecs_cluster": _output(outputs, "HandlersEcsClusterName"),
+        "ecs_task_definition": _output(outputs, "HandlersTaskFamily"),
+        "ecs_results_bucket": _output(outputs, "HandlersResultsBucketName"),
         "region": region,
     }
     return {ext: dict(route) for ext in extensions}
@@ -129,7 +142,14 @@ def main() -> int:
         if not outputs:
             print(f"skip {stack} (no outputs)")
             continue
-        merged.update(_route_from_outputs(peer["extensions"], outputs, region, account))
+        route = _route_from_outputs(peer["extensions"], outputs, region, account)
+        if not route:
+            print(
+                f"skip {stack} (no HandlersLambdaFunctionName output)",
+                file=sys.stderr,
+            )
+            continue
+        merged.update(route)
         print(f"mapped {stack} → {','.join(peer['extensions'])}")
 
     routes_path = f"/{args.env_name}/bootstrap/peer-routes"

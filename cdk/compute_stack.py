@@ -32,6 +32,7 @@ from aws_cdk import aws_s3 as s3
 from constructs import Construct
 
 from github_oidc import github_environment_sub_claims
+from package_registry import codeartifact_read_resources
 
 DESCRIPTION = "Reglo Deployment"
 GITHUB_OIDC_PROVIDER_ARN_SUFFIX = "token.actions.githubusercontent.com"
@@ -194,6 +195,42 @@ def _ecs_task_role_policy_document(
     )
 
 
+def _codeartifact_read_statements(
+    region: str,
+    account: str,
+    package_registry: dict | None = None,
+) -> list[iam.PolicyStatement]:
+    """Allow the peer/handlers OIDC role to pip-login CodeArtifact (same as Stack A)."""
+    return [
+        iam.PolicyStatement(
+            sid="CodeArtifactRead",
+            actions=[
+                "codeartifact:DescribeDomain",
+                "codeartifact:GetAuthorizationToken",
+                "codeartifact:GetRepositoryEndpoint",
+                "codeartifact:ReadFromRepository",
+                "codeartifact:DescribeRepository",
+                "codeartifact:ListPackages",
+                "codeartifact:ListPackageVersions",
+                "codeartifact:DescribePackageVersion",
+                "codeartifact:GetPackageVersionAsset",
+                "codeartifact:GetPackageVersionReadme",
+                "codeartifact:ListPackageVersionAssets",
+                "codeartifact:ListPackageVersionDependencies",
+            ],
+            resources=codeartifact_read_resources(region, account, package_registry),
+        ),
+        iam.PolicyStatement(
+            sid="CodeArtifactBearerToken",
+            actions=["sts:GetServiceBearerToken"],
+            resources=["*"],
+            conditions={
+                "StringEquals": {"sts:AWSServiceName": "codeartifact.amazonaws.com"}
+            },
+        ),
+    ]
+
+
 def _handlers_oidc_policy(
     env_name: str,
     region: str,
@@ -201,10 +238,12 @@ def _handlers_oidc_policy(
     *,
     ecs_results_bucket: str,
     peer_id: str | None = None,
+    package_registry: dict | None = None,
 ) -> iam.PolicyDocument:
     """Permissions for the handlers-repo GitHub Actions OIDC deploy role.
 
-    Matches extensions-service/utils/github-handlers-actions-policy.template.json.
+    ECR/Lambda/ECS match github-handlers-actions-policy.template.json.
+    CodeArtifact read matches launcher GitHubActionsDeployRole (peer CI pip login).
     """
     unit = handlers_unit_name(env_name, peer_id)
     handlers_ecr_arn = f"arn:aws:ecr:{region}:{account}:repository/{unit}-ecs"
@@ -310,6 +349,21 @@ def _handlers_oidc_policy(
                     f"arn:aws:ssm:{region}:{account}:parameter/{env_name}/bootstrap/ecs-security-groups",
                 ],
             ),
+            iam.PolicyStatement(
+                sid="CfnDescribePeerStack",
+                actions=["cloudformation:DescribeStacks"],
+                resources=["*"],
+            ),
+            iam.PolicyStatement(
+                sid="SsmPeerRoutes",
+                actions=["ssm:GetParameter", "ssm:GetParameters", "ssm:PutParameter"],
+                resources=[
+                    f"arn:aws:ssm:{region}:{account}:parameter/{env_name}/bootstrap/peer-routes",
+                    f"arn:aws:ssm:{region}:{account}:parameter/{env_name}/bootstrap/platform-vars/staging",
+                    f"arn:aws:ssm:{region}:{account}:parameter/{env_name}/bootstrap/platform-vars/production",
+                ],
+            ),
+            *_codeartifact_read_statements(region, account, package_registry),
         ]
     )
 
@@ -352,11 +406,13 @@ class ComputeStack(Construct):
         tenant_policy: iam.IManagedPolicy | None = None,
         handlers_network_params: dict[str, Any] | None = None,
         peer_id: str | None = None,
+        package_registry: dict | None = None,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         self._peer_id = (peer_id or "").strip() or None
+        self._package_registry = package_registry
         unit = handlers_unit_name(env_name, self._peer_id)
         self._unit = unit
         peer_id = self._peer_id
@@ -655,6 +711,7 @@ class ComputeStack(Construct):
             aws_account,
             ecs_results_bucket=ecs_results_bucket,
             peer_id=peer_id,
+            package_registry=self._package_registry,
         )
 
         def _handlers_oidc_role(stage: str) -> iam.Role:

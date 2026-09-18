@@ -113,4 +113,5 @@ def resolve_peer_deploy_context(
         "targets_path": str(targets_path),
         "github_owner_id": launcher.get("github_owner_id", ""),
         "github_repo_id": launcher.get("github_repo_id", ""),
+        "package_registry_json": launcher.get("package_registry_json", ""),
     }

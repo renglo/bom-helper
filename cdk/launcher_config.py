@@ -46,10 +46,15 @@ def resolve_from_launcher(helper_root: Path) -> dict[str, str]:
     env_name = str(cfg.get("env_name", "")).strip()
     github_repo = str(cfg.get("github_repo", "")).strip()
     bom_checkout = github_repo_checkout_name(github_repo) if github_repo else ""
+    package_registry = cfg.get("package_registry")
+    package_registry_json = (
+        json.dumps(package_registry) if isinstance(package_registry, dict) else ""
+    )
     return {
         "env_name": env_name,
         "bom_repo": github_repo,
         "bom_checkout": bom_checkout,
         "github_owner_id": str(cfg.get("github_owner_id", "")).strip(),
         "github_repo_id": str(cfg.get("github_repo_id", "")).strip(),
+        "package_registry_json": package_registry_json,
     }
