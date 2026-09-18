@@ -4,6 +4,9 @@
 Default is dry-run. Live delete requires both ``--execute`` and
 ``CONFIRM_OVERFLOW_TEARDOWN=yes``.
 
+Requires a named AWS profile (``--profile`` or ``AWS_PROFILE``). Refuses
+``default``. On ``--execute``, verifies caller account matches ``--account``.
+
 Does **not** delete peer stacks (``{env}-peer-{peerId}``), Stack A, or
 Stack B API/websocket.
 
@@ -54,21 +57,49 @@ def is_overflow_lambda(env_name: str, function_name: str) -> bool:
     return function_name.strip() == f"{env_name.strip()}{OVERFLOW_LAMBDA_SUFFIX}"
 
 
-def _delete_lambda(names: dict[str, str], region: str, execute: bool) -> None:
+def _resolve_profile(args: argparse.Namespace) -> str:
+    profile = (args.profile or os.environ.get("AWS_PROFILE") or "").strip()
+    if not profile:
+        print("Missing AWS profile: pass --profile or set AWS_PROFILE", file=sys.stderr)
+        raise SystemExit(2)
+    if profile == "default":
+        print("Refusing profile 'default'; use a named tenant profile", file=sys.stderr)
+        raise SystemExit(2)
+    return profile
+
+
+def _boto_session(profile: str, region: str):
+    import boto3
+
+    return boto3.Session(profile_name=profile, region_name=region)
+
+
+def _verify_account(session, expected_account: str) -> None:
+    caller = session.client("sts").get_caller_identity()["Account"]
+    expected = expected_account.strip()
+    if caller != expected:
+        print(
+            f"Credential account {caller} does not match --account {expected}",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+    print(f"Verified AWS account {caller} (profile {session.profile_name})")
+
+
+def _delete_lambda(session, names: dict[str, str], execute: bool) -> None:
     fn = names["lambda"]
     print(f"Lambda {fn}")
     if not execute:
         return
-    import boto3
     from botocore.exceptions import ClientError
 
-    client = boto3.client("lambda", region_name=region)
+    client = session.client("lambda")
     try:
         client.delete_function(FunctionName=fn)
         print(f"  deleted {fn}")
     except ClientError as exc:
         print(f"  skip {fn}: {exc}")
-    logs = boto3.client("logs", region_name=region)
+    logs = session.client("logs")
     try:
         logs.delete_log_group(logGroupName=names["lambda_log"])
         print(f"  deleted {names['lambda_log']}")
@@ -76,14 +107,13 @@ def _delete_lambda(names: dict[str, str], region: str, execute: bool) -> None:
         print(f"  skip log group: {exc}")
 
 
-def _delete_ecs(names: dict[str, str], region: str, execute: bool) -> None:
+def _delete_ecs(session, names: dict[str, str], execute: bool) -> None:
     print(f"ECS cluster {names['cluster']} family {names['task_family']}")
     if not execute:
         return
-    import boto3
     from botocore.exceptions import ClientError
 
-    ecs = boto3.client("ecs", region_name=region)
+    ecs = session.client("ecs")
     try:
         arns = ecs.list_task_definitions(familyPrefix=names["task_family"]).get("taskDefinitionArns") or []
         for arn in arns:
@@ -98,20 +128,21 @@ def _delete_ecs(names: dict[str, str], region: str, execute: bool) -> None:
         print(f"  skip cluster: {exc}")
 
 
-def _delete_ecr_s3_iam(names: dict[str, str], region: str, account: str, execute: bool) -> None:
+def _delete_ecr_s3_iam(
+    session, names: dict[str, str], account: str, execute: bool
+) -> None:
     print(f"ECR {names['ecr']}  S3 {names['bucket']}")
     if not execute:
         return
-    import boto3
     from botocore.exceptions import ClientError
 
-    ecr = boto3.client("ecr", region_name=region)
+    ecr = session.client("ecr")
     try:
         ecr.delete_repository(repositoryName=names["ecr"], force=True)
         print(f"  deleted ECR {names['ecr']}")
     except ClientError as exc:
         print(f"  skip ECR: {exc}")
-    s3 = boto3.client("s3", region_name=region)
+    s3 = session.client("s3")
     try:
         # Best-effort empty + delete
         paginator = s3.get_paginator("list_object_versions")
@@ -129,7 +160,7 @@ def _delete_ecr_s3_iam(names: dict[str, str], region: str, account: str, execute
         print(f"  deleted bucket {names['bucket']}")
     except ClientError as exc:
         print(f"  skip bucket: {exc}")
-    iam = boto3.client("iam")
+    iam = session.client("iam")
     for role in (names["lambda_role"], names["ecs_exec_role"], names["ecs_task_role"]):
         try:
             attached = iam.list_attached_role_policies(RoleName=role).get("AttachedPolicies") or []
@@ -162,7 +193,7 @@ def _delete_ecr_s3_iam(names: dict[str, str], region: str, account: str, execute
             print(f"  skip OIDC {role}: {exc}")
 
 
-def _strip_ssm_overflow(env_name: str, region: str, execute: bool) -> None:
+def _strip_ssm_overflow(session, env_name: str, execute: bool) -> None:
     keys = (
         "LAMBDA_EXTERNAL_HANDLERS_ARN",
         "LAMBDA_HANDLERS_FUNCTION_NAME",
@@ -174,10 +205,9 @@ def _strip_ssm_overflow(env_name: str, region: str, execute: bool) -> None:
     print(f"SSM strip overflow keys from /{env_name}/bootstrap/platform-vars/* : {', '.join(keys)}")
     if not execute:
         return
-    import boto3
     from botocore.exceptions import ClientError
 
-    ssm = boto3.client("ssm", region_name=region)
+    ssm = session.client("ssm")
     for stage in ("staging", "production"):
         name = f"/{env_name}/bootstrap/platform-vars/{stage}"
         try:
@@ -210,11 +240,20 @@ def main() -> int:
     parser.add_argument("--env-name", required=True)
     parser.add_argument("--account", required=True)
     parser.add_argument("--region", default="us-east-1")
+    parser.add_argument(
+        "--profile",
+        default="",
+        help="AWS CLI profile (else AWS_PROFILE env; must not be default)",
+    )
     parser.add_argument("--execute", action="store_true", help="Perform deletes (also needs CONFIRM_OVERFLOW_TEARDOWN=yes)")
     args = parser.parse_args()
 
+    profile = _resolve_profile(args)
+    session = _boto_session(profile, args.region)
+
     names = overflow_names(args.env_name, args.account)
     print("Overflow teardown plan (will not touch peer stacks):")
+    print(f"  profile: {profile}")
     for key, value in names.items():
         print(f"  {key}: {value}")
 
@@ -224,11 +263,13 @@ def main() -> int:
         return 2
     if not execute:
         print("dry-run only (pass --execute and CONFIRM_OVERFLOW_TEARDOWN=yes to delete)")
+    else:
+        _verify_account(session, args.account)
 
-    _delete_lambda(names, args.region, execute)
-    _delete_ecs(names, args.region, execute)
-    _delete_ecr_s3_iam(names, args.region, args.account, execute)
-    _strip_ssm_overflow(args.env_name, args.region, execute)
+    _delete_lambda(session, names, execute)
+    _delete_ecs(session, names, execute)
+    _delete_ecr_s3_iam(session, names, args.account, execute)
+    _strip_ssm_overflow(session, args.env_name, execute)
     print("Done. Peel Stack B ComputeStack and archive extensions-service per docs/OVERFLOW_TEARDOWN.md")
     return 0
 

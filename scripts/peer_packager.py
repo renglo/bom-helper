@@ -22,6 +22,10 @@ if str(_SCRIPTS) not in sys.path:
 from peers import handlers_unit_name  # noqa: E402
 from prepare_handlers_wheelhouse import pin_specs  # noqa: E402
 
+# CDK seed ZipFile is always named index.py (AWS convention). Real handler zips
+# ship lambda_router.py; publish always sets this entry point.
+LAMBDA_HANDLER = "lambda_router.lambda_handler"
+
 
 def _run(cmd: list[str], *, cwd: Path | None = None, env: dict[str, str] | None = None) -> None:
     print("+", " ".join(cmd))
@@ -151,6 +155,32 @@ def cmd_publish(args: argparse.Namespace) -> int:
             region,
         ]
     )
+    _run(
+        [
+            "aws",
+            "lambda",
+            "wait",
+            "function-updated",
+            "--function-name",
+            unit,
+            "--region",
+            region,
+        ]
+    )
+    _run(
+        [
+            "aws",
+            "lambda",
+            "update-function-configuration",
+            "--function-name",
+            unit,
+            "--handler",
+            LAMBDA_HANDLER,
+            "--region",
+            region,
+        ]
+    )
+    print(f"Published {unit} handler={LAMBDA_HANDLER}")
     return 0
 
 

@@ -337,6 +337,8 @@ python ../bom-helper/scripts/peer_packager.py publish \
   --zip ".peer-build/${PEER_ID}/lambda_deployment.zip"
 ```
 
+Publish updates zip **and** sets Handler to `lambda_router.lambda_handler` (CDK seed is `index.handler` because inline ZipFile is always `index.py`).
+
 Add `--large` on `build` and `peer_packager.py push` when `compute` is `fargate` or `ec2`.
 
 Changing **handler source** (`ecs_handlers`, new handler class) is in the extension package + a new wheel version, then this same pin bump. It is not a CDK change.
