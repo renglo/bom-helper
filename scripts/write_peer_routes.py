@@ -38,13 +38,9 @@ def _output(outputs: dict[str, str], logical: str) -> str:
 
 def _cfn_outputs(stack_name: str, region: str) -> dict[str, str]:
     import boto3
-    from botocore.exceptions import ClientError
 
     cfn = boto3.client("cloudformation", region_name=region)
-    try:
-        stacks = cfn.describe_stacks(StackName=stack_name).get("Stacks") or []
-    except ClientError:
-        return {}
+    stacks = cfn.describe_stacks(StackName=stack_name).get("Stacks") or []
     if not stacks:
         return {}
     out: dict[str, str] = {}
@@ -97,9 +93,12 @@ def _merge_platform_vars(path: str, peer_map_json: str, region: str, *, dry_run:
     try:
         raw = ssm.get_parameter(Name=path, WithDecryption=True)["Parameter"]["Value"]
         data = json.loads(raw)
-    except ClientError:
-        print(f"skip merge {path} (missing)")
-        return
+    except ClientError as exc:
+        code = str((exc.response or {}).get("Error", {}).get("Code") or "")
+        if code in {"ParameterNotFound", "ResourceNotFoundException"}:
+            print(f"skip merge {path} (missing)")
+            return
+        raise
     vars_block = data.setdefault("VARS", {})
     if not isinstance(vars_block, dict):
         vars_block = {}
@@ -151,6 +150,13 @@ def main() -> int:
             continue
         merged.update(route)
         print(f"mapped {stack} → {','.join(peer['extensions'])}")
+
+    if not merged:
+        print(
+            "ERROR: no peer routes resolved; not writing empty SSM map",
+            file=sys.stderr,
+        )
+        return 1
 
     routes_path = f"/{args.env_name}/bootstrap/peer-routes"
     _put_ssm(routes_path, {"routes": merged}, args.region, dry_run=args.dry_run)
