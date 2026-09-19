@@ -52,6 +52,10 @@ def _cfn_outputs(stack_name: str, region: str) -> dict[str, str]:
     return out
 
 
+def _csv_list(raw: str) -> list[str]:
+    return [part.strip() for part in (raw or "").split(",") if part.strip()]
+
+
 def _route_from_outputs(
     extensions: list[str],
     outputs: dict[str, str],
@@ -61,7 +65,7 @@ def _route_from_outputs(
     fn = _output(outputs, "HandlersLambdaFunctionName")
     if not fn:
         return {}
-    route = {
+    route: dict[str, Any] = {
         "lambda_function_name": fn,
         "lambda_arn": f"arn:aws:lambda:{region}:{account}:function:{fn}",
         "ecs_cluster": _output(outputs, "HandlersEcsClusterName"),
@@ -69,6 +73,18 @@ def _route_from_outputs(
         "ecs_results_bucket": _output(outputs, "HandlersResultsBucketName"),
         "region": region,
     }
+    subnets_raw = _output(outputs, "HandlersComputeSubnetIds")
+    sg = _output(outputs, "HandlersComputeSecurityGroupId")
+    launch_type = _output(outputs, "HandlersLaunchType")
+    network_mode = _output(outputs, "HandlersNetworkMode")
+    if subnets_raw:
+        route["subnets"] = _csv_list(subnets_raw)
+    if sg:
+        route["security_groups"] = [sg]
+    if launch_type:
+        route["launch_type"] = launch_type
+    if network_mode:
+        route["network_mode"] = network_mode
     return {ext: dict(route) for ext in extensions}
 
 

@@ -37,6 +37,10 @@ class CfnOutputMatchTests(unittest.TestCase):
                 "ComputeHandlersEcsClusterName32CDBAD3": "acme0813-peer-lab",
                 "ComputeHandlersTaskFamilyD73E0C2C": "acme0813-peer-lab-ecs",
                 "ComputeHandlersResultsBucketNameB7647493": "bucket",
+                "ComputeHandlersComputeSubnetIdsA1B2C3D4": "subnet-a,subnet-b",
+                "ComputeHandlersComputeSecurityGroupIdE5F6G7H8": "sg-abc",
+                "ComputeHandlersLaunchTypeI9J0K1L2": "fargate",
+                "ComputeHandlersNetworkModeM3N4O5P6": "awsvpc",
             },
             "us-east-1",
             "123",
@@ -46,6 +50,10 @@ class CfnOutputMatchTests(unittest.TestCase):
             "arn:aws:lambda:us-east-1:123:function:acme0813-peer-lab",
         )
         self.assertEqual(route["arbitiumlab"]["ecs_cluster"], "acme0813-peer-lab")
+        self.assertEqual(route["arbitiumlab"]["subnets"], ["subnet-a", "subnet-b"])
+        self.assertEqual(route["arbitiumlab"]["security_groups"], ["sg-abc"])
+        self.assertEqual(route["arbitiumlab"]["launch_type"], "fargate")
+        self.assertEqual(route["arbitiumlab"]["network_mode"], "awsvpc")
 
     def test_missing_function_name_is_empty(self) -> None:
         self.assertEqual(

@@ -164,20 +164,35 @@ def _preferred_sdist(wheelhouse: Path, dist_name: str) -> Path | None:
     return sdists[0] if sdists else None
 
 
+def _heavy_names_from_config(data: dict) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for key in ("heavy_handlers", "ecs_handlers"):
+        for name in data.get(key) or []:
+            item = str(name).strip()
+            low = item.lower()
+            if item and low not in seen:
+                seen.add(low)
+                out.append(item)
+    return out
+
+
 def _merge_handlers_configs(primary_path: Path, extra_paths: list[Path]) -> None:
-    """Merge handlers + ecs_handlers from extra configs into the primary file."""
+    """Merge handlers + heavy_handlers (legacy ecs_handlers) from extra configs."""
     merged = json.loads(primary_path.read_text(encoding="utf-8"))
     handlers = dict(merged.get("handlers") or {})
-    ecs_handlers: list[str] = list(merged.get("ecs_handlers") or [])
+    heavy_handlers = _heavy_names_from_config(merged)
     for extra_path in extra_paths:
         extra = json.loads(extra_path.read_text(encoding="utf-8"))
         handlers.update(extra.get("handlers") or {})
-        for name in extra.get("ecs_handlers") or []:
-            if name not in ecs_handlers:
-                ecs_handlers.append(name)
+        for name in _heavy_names_from_config(extra):
+            low = name.lower()
+            if low not in {h.lower() for h in heavy_handlers}:
+                heavy_handlers.append(name)
     merged["handlers"] = handlers
-    if ecs_handlers:
-        merged["ecs_handlers"] = ecs_handlers
+    if heavy_handlers:
+        merged["heavy_handlers"] = heavy_handlers
+        merged["ecs_handlers"] = heavy_handlers
     primary_path.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
 
 

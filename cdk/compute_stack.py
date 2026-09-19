@@ -655,6 +655,30 @@ class ComputeStack(Construct):
                 handlers_network_params=handlers_network_params,
             )
 
+        fargate_network_outputs: dict[str, str] = {}
+        if compute_type == "fargate":
+            default_vpc = ec2.Vpc.from_lookup(
+                self,
+                "FargateDefaultVpc",
+                is_default=True,
+            )
+            fargate_sg = ec2.SecurityGroup(
+                self,
+                "FargateTasksSecurityGroup",
+                vpc=default_vpc,
+                description=f"Fargate ECS tasks for {unit}",
+                allow_all_outbound=True,
+            )
+            subnet_ids = Fn.join(",", [subnet.subnet_id for subnet in default_vpc.public_subnets])
+            fargate_network_outputs = {
+                "HandlersComputeSubnetIds": subnet_ids,
+                "HandlersComputeSecurityGroupId": fargate_sg.security_group_id,
+                "HandlersLaunchType": "fargate",
+                "HandlersNetworkMode": "awsvpc",
+            }
+            for key, val in fargate_network_outputs.items():
+                CfnOutput(self, key, value=val)
+
         # --- Outputs ---
         CfnOutput(self, "HandlersEcrRepoName", value=handlers_repo.repository_name)
         CfnOutput(self, "HandlersEcrRepoUri", value=handlers_repo.repository_uri)
@@ -679,6 +703,7 @@ class ComputeStack(Construct):
             "HandlersLambdaFunctionName": handlers_fn.function_name,  # type: ignore[arg-type]
             "HandlersTaskFamily": task_family,
             **ec2_network_outputs,
+            **fargate_network_outputs,
         }
 
         self._provision_handlers_oidc(

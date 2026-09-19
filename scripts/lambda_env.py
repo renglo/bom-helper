@@ -44,10 +44,11 @@ CI_ONLY_ENV_KEYS = frozenset(
     }
 )
 CONSOLE_ONLY_ENV_PREFIXES = ("VITE_", "AMPLIFY_")
-# Routing catalogs and maps belong in SSM / extension packages, not Lambda env.
+# Routing maps belong in SSM peer-routes, not Lambda env.
+# EXTERNAL_HANDLERS_HEAVY stays on the *hub* (API decides light vs heavy);
+# peers read heavy_handlers from their zip handlers_config.json instead.
 HANDLERS_ONLY_ENV_KEYS = frozenset(
     {
-        "EXTERNAL_HANDLERS_ECS_HANDLERS",
         "EXTERNAL_HANDLERS_PEER_MAP",
     }
 )
@@ -146,7 +147,10 @@ def filter_peer_lambda_env(source: dict[str, str], *, log: bool = False) -> dict
     out: dict[str, str] = {}
     skipped: list[str] = []
     for key, value in filtered.items():
-        if key in OVERFLOW_IDENTITY_ENV_KEYS:
+        if key in OVERFLOW_IDENTITY_ENV_KEYS or key in {
+            "EXTERNAL_HANDLERS_HEAVY",
+            "EXTERNAL_HANDLERS_ECS_HANDLERS",
+        }:
             skipped.append(key)
             continue
         out[key] = value

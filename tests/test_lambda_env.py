@@ -33,6 +33,7 @@ class LambdaEnvTests(unittest.TestCase):
                 "AWS_REGION": "us-east-1",
                 "LAMBDA_BACKEND_ARN": "arn:aws:lambda:...",
                 "OPENAI_API_KEY": "sk-test",
+                "EXTERNAL_HANDLERS_HEAVY": "acmewidget:aws_threats;acmeextra:aws_aid_networks",
                 "EXTERNAL_HANDLERS_ECS_HANDLERS": "acmewidget:aws_threats;acmeextra:aws_aid_networks",
                 "EXTERNAL_HANDLERS_PEER_MAP": '{"acmewidget":{"lambda_arn":"arn:..."}}',
                 "bad-key": "nope",
@@ -40,7 +41,12 @@ class LambdaEnvTests(unittest.TestCase):
         )
         self.assertEqual(
             filtered,
-            {"WL_NAME": "acme0813", "OPENAI_API_KEY": "sk-test"},
+            {
+                "WL_NAME": "acme0813",
+                "OPENAI_API_KEY": "sk-test",
+                "EXTERNAL_HANDLERS_HEAVY": "acmewidget:aws_threats;acmeextra:aws_aid_networks",
+                "EXTERNAL_HANDLERS_ECS_HANDLERS": "acmewidget:aws_threats;acmeextra:aws_aid_networks",
+            },
         )
 
     def test_payload_size_is_utf8_keys_plus_values(self) -> None:
@@ -71,6 +77,8 @@ class LambdaEnvTests(unittest.TestCase):
                 "OPENAI_API_KEY": "sk-test",
                 "LAMBDA_FUNCTION_NAME": "acme0813-handlers",
                 "ECS_CLUSTER": "acme0813-handlers-ecs",
+                "EXTERNAL_HANDLERS_HEAVY": "acmewidget:aws_threats",
+                "EXTERNAL_HANDLERS_ECS_HANDLERS": "acmewidget:aws_threats",
                 "DYNAMODB_ENTITY_TABLE": "stale_entities",
                 "VITE_WEBSOCKET_URL": "wss://example/",
             },
@@ -81,6 +89,8 @@ class LambdaEnvTests(unittest.TestCase):
         self.assertEqual(merged["OPENAI_API_KEY"], "sk-test")
         self.assertNotIn("LAMBDA_FUNCTION_NAME", merged)
         self.assertNotIn("ECS_CLUSTER", merged)
+        self.assertNotIn("EXTERNAL_HANDLERS_HEAVY", merged)
+        self.assertNotIn("EXTERNAL_HANDLERS_ECS_HANDLERS", merged)
         self.assertNotIn("VITE_WEBSOCKET_URL", merged)
 
 
