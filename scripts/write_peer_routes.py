@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Merge peer-stack CloudFormation outputs into SSM handle → peer map.
 
-Does not remove overflow singleton ARNs (dual-run). Run after
-``cdk deploy`` of ``{env}-peer-{peerId}``.
+Each handle also gets ``heavy_handlers`` from that extension's
+``handlers_config.json`` so the hub can classify light vs heavy without
+Lambda env blobs. Run after ``cdk deploy`` of ``{env}-peer-{peerId}``.
 
     python scripts/write_peer_routes.py deploy_targets.yml \\
         --env-name acme0813 --region us-east-1
@@ -56,11 +57,69 @@ def _csv_list(raw: str) -> list[str]:
     return [part.strip() for part in (raw or "").split(",") if part.strip()]
 
 
+def _search_roots(targets_file: Path | None = None) -> list[Path]:
+    roots = [Path.cwd()]
+    if targets_file:
+        resolved = targets_file.resolve()
+        roots.append(resolved.parent)
+        roots.append(resolved.parent.parent)
+    here = Path(__file__).resolve()
+    roots.extend(here.parents[i] for i in range(1, min(5, len(here.parents))))
+    out: list[Path] = []
+    seen: set[Path] = set()
+    for root in roots:
+        try:
+            path = root.resolve()
+        except OSError:
+            continue
+        if path not in seen:
+            seen.add(path)
+            out.append(path)
+    return out
+
+
+def _heavy_handlers_from_config(path: Path) -> list[str]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    raw = data.get("heavy_handlers")
+    if not isinstance(raw, list):
+        raw = data.get("ecs_handlers")
+    if not isinstance(raw, list):
+        return []
+    seen: list[str] = []
+    for item in raw:
+        name = str(item).strip().lower()
+        if name and name not in seen:
+            seen.append(name)
+    return seen
+
+
+def heavy_handlers_for_extension(
+    handle: str, roots: list[Path] | None = None
+) -> list[str]:
+    handle = (handle or "").strip()
+    if not handle:
+        return []
+    rels = (
+        Path("extensions") / handle / "package" / "handlers_config.json",
+        Path(handle) / "package" / "handlers_config.json",
+    )
+    for root in roots or _search_roots():
+        for rel in rels:
+            path = root / rel
+            if path.is_file():
+                return _heavy_handlers_from_config(path)
+    return []
+
+
 def _route_from_outputs(
     extensions: list[str],
     outputs: dict[str, str],
     region: str,
     account: str,
+    heavy_by_ext: dict[str, list[str]] | None = None,
 ) -> dict[str, Any]:
     fn = _output(outputs, "HandlersLambdaFunctionName")
     if not fn:
@@ -85,7 +144,14 @@ def _route_from_outputs(
         route["launch_type"] = launch_type
     if network_mode:
         route["network_mode"] = network_mode
-    return {ext: dict(route) for ext in extensions}
+    out: dict[str, Any] = {}
+    for ext in extensions:
+        row = dict(route)
+        names = (heavy_by_ext or {}).get(ext) or []
+        if names:
+            row["heavy_handlers"] = names
+        out[ext] = row
+    return out
 
 
 def _put_ssm(name: str, payload: dict[str, Any], region: str, *, dry_run: bool) -> None:
@@ -101,10 +167,31 @@ def _put_ssm(name: str, payload: dict[str, Any], region: str, *, dry_run: bool) 
     print(f"wrote {name}")
 
 
+# Dead overflow / soak leftovers. Routing lives on peer-routes SSM.
+_LEGACY_PLATFORM_VAR_KEYS = frozenset(
+    {
+        "EXTERNAL_HANDLERS_PEER_MAP",
+        "EXTERNAL_HANDLERS_HEAVY",
+        "EXTERNAL_HANDLERS_ECS_HANDLERS",
+        "EXTERNAL_HANDLERS_PEER_ROUTING",
+        "LAMBDA_EXTERNAL_HANDLERS_ARN",
+        "LAMBDA_HANDLERS_FUNCTION_NAME",
+        "ECS_CLUSTER",
+        "ECS_TASK_DEFINITION",
+        "ECS_RESULTS_BUCKET",
+        "ECS_LAUNCH_TYPE",
+        "ECS_NETWORK_MODE",
+        "ECS_VPC",
+        "ECS_SUBNETS",
+        "ECS_SECURITY_GROUPS",
+    }
+)
+
+
 def _strip_legacy_peer_map_from_platform_vars(
     path: str, region: str, *, dry_run: bool
 ) -> None:
-    """Remove inlined peer map from platform-vars (canonical store is peer-routes SSM)."""
+    """Remove overflow identity and soak blobs from platform-vars."""
     import boto3
     from botocore.exceptions import ClientError
 
@@ -121,11 +208,13 @@ def _strip_legacy_peer_map_from_platform_vars(
     vars_block = data.get("VARS")
     if not isinstance(vars_block, dict):
         return
-    if "EXTERNAL_HANDLERS_PEER_MAP" not in vars_block:
+    removed = [key for key in _LEGACY_PLATFORM_VAR_KEYS if key in vars_block]
+    if not removed:
         return
-    del vars_block["EXTERNAL_HANDLERS_PEER_MAP"]
+    for key in removed:
+        del vars_block[key]
     _put_ssm(path, data, region, dry_run=dry_run)
-    print(f"removed legacy EXTERNAL_HANDLERS_PEER_MAP from {path}")
+    print(f"removed leftover routing key(s) from {path}: {', '.join(removed)}")
 
 
 def main() -> int:
@@ -162,7 +251,20 @@ def main() -> int:
         if not outputs:
             print(f"skip {stack} (no outputs)")
             continue
-        route = _route_from_outputs(peer["extensions"], outputs, region, account)
+        roots = _search_roots(Path(args.targets_file))
+        heavy_by_ext: dict[str, list[str]] = {}
+        for ext in peer["extensions"]:
+            names = heavy_handlers_for_extension(ext, roots)
+            if not names:
+                print(
+                    f"warning: no heavy_handlers for {ext} "
+                    "(missing extensions/{ext}/package/handlers_config.json?)",
+                    file=sys.stderr,
+                )
+            heavy_by_ext[ext] = names
+        route = _route_from_outputs(
+            peer["extensions"], outputs, region, account, heavy_by_ext=heavy_by_ext
+        )
         if not route:
             print(
                 f"skip {stack} (no HandlersLambdaFunctionName output)",

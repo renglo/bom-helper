@@ -155,7 +155,11 @@ class ExtensionStack(Construct):
                 CfnOutput(self, key, value=text)
 
         for key, value in extension_config.items():
-            if key in ("SECRETS",) or not isinstance(value, (str, int, float, bool)):
+            if key in (
+                "SECRETS",
+                "EXTERNAL_HANDLERS_HEAVY",
+                "EXTERNAL_HANDLERS_ECS_HANDLERS",
+            ) or not isinstance(value, (str, int, float, bool)):
                 continue
             text = str(value).replace("{env}", env_name)
             if not text or key in runtime_outputs:
@@ -184,23 +188,14 @@ class ExtensionStack(Construct):
             or runtime_outputs.get("EXTERNAL_HANDLERS")
             or ""
         ).strip()
-        external_handlers_heavy = str(
-            extension_config.get("EXTERNAL_HANDLERS_HEAVY")
-            or extension_config.get("EXTERNAL_HANDLERS_ECS_HANDLERS")
-            or runtime_outputs.get("EXTERNAL_HANDLERS_HEAVY")
-            or runtime_outputs.get("EXTERNAL_HANDLERS_ECS_HANDLERS")
-            or ""
-        ).strip()
         # May already be present from extension_config / runtime_defaults loops above.
+        runtime_outputs.pop("EXTERNAL_HANDLERS_HEAVY", None)
+        runtime_outputs.pop("EXTERNAL_HANDLERS_ECS_HANDLERS", None)
         if external_handlers and "EXTERNAL_HANDLERS" not in runtime_outputs:
             runtime_outputs["EXTERNAL_HANDLERS"] = external_handlers
             CfnOutput(self, "EXTERNAL_HANDLERS", value=external_handlers)
         elif external_handlers:
             runtime_outputs["EXTERNAL_HANDLERS"] = external_handlers
-        if external_handlers_heavy:
-            runtime_outputs["EXTERNAL_HANDLERS_HEAVY"] = external_handlers_heavy
-            runtime_outputs["EXTERNAL_HANDLERS_ECS_HANDLERS"] = external_handlers_heavy
-            CfnOutput(self, "EXTERNAL_HANDLERS_HEAVY", value=external_handlers_heavy)
 
         self.actions_policy = actions_policy
         self.runtime_outputs = runtime_outputs

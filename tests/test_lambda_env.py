@@ -32,6 +32,9 @@ class LambdaEnvTests(unittest.TestCase):
                 "AWS_ECR_REPOSITORY": "repo",
                 "AWS_REGION": "us-east-1",
                 "LAMBDA_BACKEND_ARN": "arn:aws:lambda:...",
+                "LAMBDA_EXTERNAL_HANDLERS_ARN": "arn:aws:lambda:us-east-1:1:function:acme0813-handlers",
+                "ECS_CLUSTER": "acme0813-handlers",
+                "ECR_IMAGE_URI": "123.dkr.ecr.us-east-1.amazonaws.com/acme0813-handlers:latest",
                 "OPENAI_API_KEY": "sk-test",
                 "EXTERNAL_HANDLERS_HEAVY": "acmewidget:aws_threats;acmeextra:aws_aid_networks",
                 "EXTERNAL_HANDLERS_ECS_HANDLERS": "acmewidget:aws_threats;acmeextra:aws_aid_networks",
@@ -44,10 +47,14 @@ class LambdaEnvTests(unittest.TestCase):
             {
                 "WL_NAME": "acme0813",
                 "OPENAI_API_KEY": "sk-test",
-                "EXTERNAL_HANDLERS_HEAVY": "acmewidget:aws_threats;acmeextra:aws_aid_networks",
-                "EXTERNAL_HANDLERS_ECS_HANDLERS": "acmewidget:aws_threats;acmeextra:aws_aid_networks",
             },
         )
+        self.assertNotIn("EXTERNAL_HANDLERS_HEAVY", filtered)
+        self.assertNotIn("EXTERNAL_HANDLERS_ECS_HANDLERS", filtered)
+        self.assertNotIn("EXTERNAL_HANDLERS_PEER_MAP", filtered)
+        self.assertNotIn("LAMBDA_EXTERNAL_HANDLERS_ARN", filtered)
+        self.assertNotIn("ECS_CLUSTER", filtered)
+        self.assertNotIn("ECR_IMAGE_URI", filtered)
 
     def test_payload_size_is_utf8_keys_plus_values(self) -> None:
         env = {"AB": "cd", "E": "fgh"}

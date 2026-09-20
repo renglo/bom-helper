@@ -44,16 +44,19 @@ CI_ONLY_ENV_KEYS = frozenset(
     }
 )
 CONSOLE_ONLY_ENV_PREFIXES = ("VITE_", "AMPLIFY_")
-# Routing maps belong in SSM peer-routes, not Lambda env.
-# EXTERNAL_HANDLERS_HEAVY stays on the *hub* (API decides light vs heavy);
-# peers read heavy_handlers from their zip handlers_config.json instead.
+# Light vs heavy lives on SSM peer-routes. Soak alias and overflow identity
+# must not be copied onto the hub or a peer Lambda.
 HANDLERS_ONLY_ENV_KEYS = frozenset(
     {
         "EXTERNAL_HANDLERS_PEER_MAP",
+        "EXTERNAL_HANDLERS_HEAVY",
+        "EXTERNAL_HANDLERS_ECS_HANDLERS",
+        "EXTERNAL_HANDLERS_PEER_ROUTING",
+        "ECR_IMAGE_URI",
     }
 )
 
-# Overflow singleton identity — do not copy onto a peer Lambda (peer-routes owns routing).
+# Overflow singleton identity — peer-routes owns routing.
 OVERFLOW_IDENTITY_ENV_KEYS = frozenset(
     {
         "LAMBDA_EXTERNAL_HANDLERS_ARN",
@@ -110,6 +113,7 @@ def filter_lambda_env(
             is_reserved_env_key(key)
             or is_console_only_env_key(key)
             or key in HANDLERS_ONLY_ENV_KEYS
+            or key in OVERFLOW_IDENTITY_ENV_KEYS
         ):
             skipped.append(key)
             continue
@@ -147,10 +151,7 @@ def filter_peer_lambda_env(source: dict[str, str], *, log: bool = False) -> dict
     out: dict[str, str] = {}
     skipped: list[str] = []
     for key, value in filtered.items():
-        if key in OVERFLOW_IDENTITY_ENV_KEYS or key in {
-            "EXTERNAL_HANDLERS_HEAVY",
-            "EXTERNAL_HANDLERS_ECS_HANDLERS",
-        }:
+        if key in OVERFLOW_IDENTITY_ENV_KEYS or key in HANDLERS_ONLY_ENV_KEYS:
             skipped.append(key)
             continue
         out[key] = value
