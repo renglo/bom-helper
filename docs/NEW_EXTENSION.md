@@ -238,7 +238,7 @@ Pin the wheel in the lab peer BOM that `peers.lab.peers_bom` points at: `ops/arb
 }
 ```
 
-If xyz has `heavy_handlers`, lab must stay `fargate` or `ec2` (it already is). A `lambda_only` peer cannot run those handlers.
+If the console will call `/start` for xyz handlers, lab must stay `fargate` or `ec2` (it already is). A `lambda_only` peer has no ECS for `/start`.
 
 ### b) Execute
 
@@ -281,7 +281,7 @@ peers:
     peers_bom: 0.1.8
 ```
 
-Use `compute: lambda_only` instead of `fargate` if xyz has no `heavy_handlers`.
+Use `compute: lambda_only` instead of `fargate` if xyz only needs sync handlers (no `/start`).
 
 Create `ops/arbitium-bom/peers_bom/audio/v0.1.8.json` (version must match `peers.audio.peers_bom`):
 
