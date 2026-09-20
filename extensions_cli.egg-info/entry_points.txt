@@ -1,0 +1,2 @@
+[console_scripts]
+extensions = extensions_cli.cli:main
