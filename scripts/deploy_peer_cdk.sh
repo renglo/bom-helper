@@ -12,8 +12,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HELPER_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-VENV_PYTHON="$HELPER_ROOT/venv/bin/python"
-CDK_APP="../venv/bin/python app.py"
+VENV_NAME="${BOM_VENV_NAME:-bom-venv}"
+VENV_PYTHON="$HELPER_ROOT/$VENV_NAME/bin/python"
+CDK_APP="../$VENV_NAME/bin/python app.py"
 
 usage() {
   cat <<'EOF'
@@ -95,6 +96,42 @@ if [[ -n "$PEER_ID" ]]; then
   STACK="${ENV}-peer-${PEER_ID}"
 fi
 
+# CDK seed ZipFile is always index.py / index.handler. peer_packager then
+# publishes the real zip and sets Handler to lambda_router.lambda_handler.
+# A later CDK deploy resets Handler even when it leaves the zip in place —
+# restore the published entry point when CodeSize shows a real package.
+_aws() {
+  local extra=()
+  [[ -n "$PROFILE" ]] && extra+=(--profile "$PROFILE")
+  aws --region "${AWS_REGION:-us-east-1}" "${extra[@]}" "$@"
+}
+
+_pin_published_handler() {
+  local fn="$1"
+  local handler size
+  handler="$(_aws lambda get-function-configuration --function-name "$fn" --query Handler --output text)"
+  size="$(_aws lambda get-function-configuration --function-name "$fn" --query CodeSize --output text)"
+  if [[ "$size" -le 10000 ]]; then
+    echo "  skip handler pin for ${fn} (seed zip, ${size} bytes)"
+    return 0
+  fi
+  if [[ "$handler" == "lambda_router.lambda_handler" ]]; then
+    echo "  handler already ${handler} (${fn})"
+    return 0
+  fi
+  echo "+ pin ${fn} handler ${handler} → lambda_router.lambda_handler (zip ${size} bytes)"
+  _aws lambda update-function-configuration --function-name "$fn" --handler lambda_router.lambda_handler >/dev/null
+  _aws lambda wait function-updated --function-name "$fn"
+}
+
+_pin_published_handler_all() {
+  local fn
+  while IFS= read -r fn; do
+    [[ -z "$fn" ]] && continue
+    _pin_published_handler "$fn"
+  done < <(_aws lambda list-functions --query "Functions[?starts_with(FunctionName, '${ENV}-peer-')].FunctionName" --output text | tr '\t' '\n')
+}
+
 cd "$HELPER_ROOT/cdk"
 
 case "$ACTION" in
@@ -111,9 +148,11 @@ case "$ACTION" in
     if [[ -n "$STACK" ]]; then
       echo "+ cdk deploy ${STACK} --output ${OUTPUT_DIR} ..."
       cdk deploy "$STACK" "${CDK_ARGS[@]}" --require-approval never
+      _pin_published_handler "$STACK"
     else
       echo "+ cdk deploy --all --output ${OUTPUT_DIR} ..."
       cdk deploy --all "${CDK_ARGS[@]}" --require-approval never
+      _pin_published_handler_all
     fi
     ;;
   destroy)

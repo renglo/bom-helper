@@ -82,6 +82,27 @@ For tenant id `{env_id}` and peer id `{peer_id}`:
 | OIDC role (staging)      | `GitHubActionsHandlersRole-{env_id}-{peer_id}-staging` |
 
 
+Adding a new extension: [EXTENSIONS.md](EXTENSIONS.md) (`extensions install …`). Manual file list: [NEW_EXTENSION.md](NEW_EXTENSION.md).
+
+## Extension actions IAM
+
+The policy JSON in `extensions/<handle>/installer/infra/` (`cdk_extension.json` → `policy_file`) is the install-time contract. **The same installer also declares buckets and vector indexes.** Catalog placement decides **which stack creates that infra and who is attached**:
+
+| Installed on | Catalog | Who creates buckets / indexes / policy | Runtime roles |
+| --- | --- | --- | --- |
+| Hub API image | `hub.python` (slot in `packages:`) | Stack B | `{env}_tt_role` |
+| Peer | `peers.<id>.extensions` | That peer stack (bom-helper CDK) | `{env}-peer-{id}-role` and `{env}-peer-{id}-ecs-task` |
+
+Do **not** use `customer-config.json` `extension_path` (legacy single-extension Stack B bundle). Synth reads sibling `*-bom/deploy_targets.yml` — the same catalog peer CDK already uses.
+
+One policy per extension, not per handler. Peer stacks name policies `{env}-peer-{id}-{handle}-actions`. Hub uses the manifest `policy_name`. Overflow `{env}-handlers-*` roles are not attach targets.
+
+Peer `HandlersPolicy` stays ECS plumbing. `{env}_tt_policy` stays tenant platform — not AID/ARD inventory.
+
+Moving an extension from Stack B to a peer: deploy **Stack B first** (drops old Extension resources), then the **peer stack** (creates them). Two stacks must not own the same S3 Vectors index.
+
+Changing `hub.python` or `peers.*.extensions` is a CDK update of Stack B or that peer stack (not a pin bump).
+
 ## Where configuration lives
 
 Put each kind of change in exactly one place. If it is not in this table, it is not peer config.
@@ -99,6 +120,7 @@ Put each kind of change in exactly one place. If it is not in this table, it is 
 | Peer Lambda runtime env (tables, `WL_NAME`, secrets)      | SSM `/{env}/bootstrap/deploy-input` + packager                                           | `peer_packager.py publish --env-json`; tables are always `{env}_*`                    |
 | Laptop routing                                            | `dev/renglo-api/env_config.py`                                                           | `EXTERNAL_HANDLERS_PEER_MAP`, `EXTERNAL_HANDLERS_PEER_ROUTING`                        |
 | First-time AWS stack (IAM, Lambda seed, ECS)              | laptop / admin                                                                           | `bash setup-venv.sh`, then `cdk synth` + `cdk deploy` from `bom-helper/cdk` (see §1d) |
+| Extension actions policy (what the handle may do in AWS)  | `extensions/<handle>/installer/infra/` + catalog placement                               | `cdk_extension.json` `policy_file`; attach via Stack B (`hub.python`) or peer CDK (`extensions:`) |
 | Zip + ECS **image** after the stack exists                | GitHub Actions                                                                           | `.github/workflows/deploy_peers.yml`                                                  |
 | Helper CDK/packager version                               | `deploy_targets.yml`                                                                     | `helper.ref`                                                                          |
 | Tenant AWS account / region                               | `deploy_targets.yml`                                                                     | `tenants.<name>.aws_account`, `aws_region`                                            |
@@ -232,13 +254,13 @@ Synth writes CloudFormation templates under `cdk/output/<peer_id>/`. Use the **s
 cd <workspace>/bom-helper/cdk
 
 cdk synth "${ENV}-peer-${PEER_ID}" \
-  --app "../venv/bin/python app.py" \
+  --app "../bom-venv/bin/python app.py" \
   --output "../output/${PEER_ID}" \
   --profile "$AWS_PROFILE" \
   --context "peer_id=${PEER_ID}"
 
 cdk deploy "${ENV}-peer-${PEER_ID}" \
-  --app "../venv/bin/python app.py" \
+  --app "../bom-venv/bin/python app.py" \
   --output "../output/${PEER_ID}" \
   --require-approval never \
   --profile "$AWS_PROFILE" \
@@ -247,7 +269,7 @@ cdk deploy "${ENV}-peer-${PEER_ID}" \
 
 Synth validates the template locally (same flags as deploy, minus `--require-approval`). Fix errors before deploy. Generated files are gitignored under `cdk/output/`.
 
-One-time setup: `setup-venv.sh` creates `bom-helper/venv` with `aws-cdk-lib` (same pattern as bootstrap). Requires the **CDK CLI** on your PATH (`npm install -g aws-cdk`). Do not copy `venv/` from another machine.
+One-time setup: `setup-venv.sh` creates `bom-helper/bom-venv` with `aws-cdk-lib` (same pattern as bootstrap, but named `bom-venv` so it is not confused with the application `venv`). Requires the **CDK CLI** on your PATH (`npm install -g aws-cdk`). Do not copy `bom-venv/` from another machine.
 
 Omit `--peer-id` / `peer_id` context to synth/deploy **every** catalog peer (`cdk synth --all` / `cdk deploy --all`, or `deploy_peer_cdk.sh` without `--peer-id`). Those use `cdk/output/_all/`.
 
@@ -343,7 +365,7 @@ python ../bom-helper/scripts/peer_packager.py publish \
   --env-json lambda_env_merge.json
 ```
 
-Publish updates zip, sets Handler to `lambda_router.lambda_handler` (CDK seed is `index.handler` because inline ZipFile is always `index.py`), and applies filtered SSM deploy-input env. Table names and `WL_NAME` always come from `--env-name` (`{env}_entities`, `{env}_data`, …). Overflow identity keys (`LAMBDA_FUNCTION_NAME`, ECS cluster, …) are not copied onto the peer.
+Publish updates zip and sets Handler to `lambda_router.lambda_handler`. The zip also includes `index.py`, a one-line forwarder to that same function, because CDK seed Handler is `index.handler` (inline ZipFile is always `index.py`). A later CDK deploy that resets Handler still reaches the router. `deploy_peer_cdk.sh deploy` also pins Handler when `CodeSize` shows a real package. Table names and `WL_NAME` always come from `--env-name` (`{env}_entities`, `{env}_data`, …). Overflow identity keys (`LAMBDA_FUNCTION_NAME`, ECS cluster, …) are not copied onto the peer.
 
 Add `--large` on `build` and `peer_packager.py push` when `compute` is `fargate` or `ec2`.
 
@@ -359,7 +381,7 @@ Infra vs runtime vs pins:
 | Change                                                                     | Where                                                             | Then                                                                                                        |
 | -------------------------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `compute` (`lambda_only` ↔ `fargate`/`ec2`), `task_size`, EC2 instance/ASG | `deploy_targets.yml` `peers.<id>`                                 | CDK deploy **that** peer stack                                                                              |
-| `extensions:` (move a handle onto this peer)                               | `deploy_targets.yml`                                              | Move the handle off the other peer first; `write_peer_routes.py`; maybe pin extra dist in `peers_bom/<id>/` |
+| `extensions:` (move a handle onto this peer)                               | `deploy_targets.yml`                                              | Move the handle off the other peer first; `write_peer_routes.py`; CDK deploy that peer (actions IAM); maybe pin extra dist in `peers_bom/<id>/` |
 | `aws_region`                                                               | `deploy_targets.yml` `peers.<id>.aws_region`                      | CDK deploy in that region (new stack); update routes                                                        |
 | `iam_profile`                                                              | `deploy_targets.yml`                                              | CDK / IAM on **that** peer only (not overflow roles)                                                        |
 | `peers_bom` version                                                        | `deploy_targets.yml` + new JSON under `peers_bom/<id>/`           | `deploy_peers.yml` (path 2)                                                                                 |

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Wrapper when the venv is not activated — prefers bom-helper/bom-venv.
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VENV_NAME="${BOM_VENV_NAME:-bom-venv}"
+for dir in "$VENV_NAME" bom-venv venv; do
+  if [[ -x "$ROOT/$dir/bin/extensions" ]]; then
+    exec "$ROOT/$dir/bin/extensions" "$@"
+  fi
+  if [[ -x "$ROOT/$dir/bin/python" ]]; then
+    exec "$ROOT/$dir/bin/python" -m extensions_cli "$@"
+  fi
+done
+echo "extensions: run bash setup-venv.sh from ops/bom-helper, then:" >&2
+echo "  source bom-venv/bin/activate" >&2
+echo "  extensions $*" >&2
+exit 1

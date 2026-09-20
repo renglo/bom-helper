@@ -6,6 +6,7 @@ Tenant BOM repos keep **pins + placement** (`bom/` hub, `console_bom/`, `peers_b
 This repo owns the scripts, Dockerfile, **peer CDK/packager**, and the GitHub Action that wires them into CI.
 
 Peer vocabulary, add-peer, grouping, and MCP: [docs/PEERS.md](docs/PEERS.md).
+Extensions CLI: [docs/EXTENSIONS.md](docs/EXTENSIONS.md) (`bash setup-venv.sh && source bom-venv/bin/activate && extensions help`).
 Overflow teardown after smoke: [docs/OVERFLOW_TEARDOWN.md](docs/OVERFLOW_TEARDOWN.md).
 
 ## What stays where

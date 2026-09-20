@@ -85,6 +85,8 @@ class HandlersPeerStack(Stack):
                 "ImportedTenantPolicy",
                 managed_policy_name=f"{env_name}_tt_policy",
             ),
+            extension_handles=list(peer.get("extensions") or []),
+            extensions_root=_HELPER_ROOT.parents[1],
         )
 
 

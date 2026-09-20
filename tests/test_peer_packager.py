@@ -14,7 +14,7 @@ from unittest import mock
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from peer_packager import LAMBDA_HANDLER, cmd_publish  # noqa: E402
+from peer_packager import INDEX_SHIM, LAMBDA_HANDLER, _dockerfile, cmd_publish  # noqa: E402
 
 
 class PublishHandlerTests(unittest.TestCase):
@@ -69,6 +69,18 @@ class PublishHandlerTests(unittest.TestCase):
         self.assertEqual(env["DYNAMODB_RINGDATA_TABLE"], "acme0813_data")
         self.assertEqual(env["OPENAI_API_KEY"], "sk-test")
         self.assertNotIn("LAMBDA_FUNCTION_NAME", env)
+
+
+class IndexShimTests(unittest.TestCase):
+    def test_shim_exports_handler_from_lambda_router(self) -> None:
+        src = INDEX_SHIM.read_text(encoding="utf-8")
+        self.assertIn("from lambda_router import lambda_handler as handler", src)
+
+    def test_build_image_installs_shim_as_index_py(self) -> None:
+        text = _dockerfile(large=False)
+        self.assertIn("COPY lambda_index_shim.py /build/lambda_index_shim.py", text)
+        self.assertIn("cp /build/lambda_index_shim.py /build/output/index.py", text)
+        self.assertIn("cp /build/assets/lambda_router.py /build/output/", text)
 
 
 if __name__ == "__main__":

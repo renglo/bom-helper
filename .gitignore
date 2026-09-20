@@ -1,9 +1,15 @@
+.extensions/
 *.pyc
 .venv/
 venv/
+bom-venv/
 __pycache__/
 wheels/
 
 # CDK synth assemblies (templates, assets, manifest) — see deploy_peer_cdk.sh
 cdk/output/
 output/
+
+# Local deploy / SSM fetch (may contain secrets after --merge-secret)
+deploy_input.json
+lambda_env_merge.json

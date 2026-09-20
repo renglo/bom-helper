@@ -25,8 +25,10 @@ from peers import handlers_unit_name  # noqa: E402
 from prepare_handlers_wheelhouse import pin_specs  # noqa: E402
 
 # CDK seed ZipFile is always named index.py (AWS convention). Real handler zips
-# ship lambda_router.py; publish always sets this entry point.
+# ship lambda_router.py plus an index.py shim so index.handler still reaches
+# the router if CDK resets Handler. Publish also pins this entry point.
 LAMBDA_HANDLER = "lambda_router.lambda_handler"
+INDEX_SHIM = _SCRIPTS / "lambda_index_shim.py"
 
 
 def _load_env_json(path: str) -> dict[str, str]:
@@ -44,6 +46,67 @@ def _load_env_json(path: str) -> dict[str, str]:
 def _run(cmd: list[str], *, cwd: Path | None = None, env: dict[str, str] | None = None) -> None:
     print("+", " ".join(cmd))
     subprocess.run(cmd, check=True, cwd=cwd, env=env)
+
+
+def _ecs_env_list(env: dict[str, str]) -> list[dict[str, str]]:
+    return [{"name": k, "value": v} for k, v in sorted(env.items())]
+
+
+def sync_peer_ecs_task_env(
+    env_name: str,
+    peer_id: str,
+    extra: dict[str, str] | None,
+    *,
+    region: str,
+    log: bool = True,
+) -> str:
+    """Register a new task-def revision with the same runtime env as the peer Lambda."""
+    import boto3
+
+    ecs = boto3.client("ecs", region_name=region)
+    unit = handlers_unit_name(env_name, peer_id)
+    family = f"{unit}-ecs"
+    runtime_env = merge_peer_lambda_env(env_name, extra, log=log)
+    env_list = _ecs_env_list(runtime_env)
+
+    listed = ecs.list_task_definitions(familyPrefix=family, sort="DESC", status="ACTIVE")
+    arns = listed.get("taskDefinitionArns") or []
+    if not arns:
+        raise RuntimeError(f"No ACTIVE ECS task definition for family {family!r}")
+
+    desc = ecs.describe_task_definition(taskDefinition=arns[0])["taskDefinition"]
+    containers: list[dict] = []
+    for raw in desc["containerDefinitions"]:
+        container = dict(raw)
+        container.pop("containerArn", None)
+        if container.get("name") == "handler":
+            container["environment"] = env_list
+        containers.append(container)
+
+    reg_kw: dict = {"family": desc["family"], "containerDefinitions": containers}
+    for key in (
+        "taskRoleArn",
+        "executionRoleArn",
+        "networkMode",
+        "volumes",
+        "placementConstraints",
+        "requiresCompatibilities",
+        "cpu",
+        "memory",
+        "ipcMode",
+        "pidMode",
+        "proxyConfiguration",
+        "inferenceAccelerators",
+        "ephemeralStorage",
+        "runtimePlatform",
+    ):
+        if desc.get(key) is not None:
+            reg_kw[key] = desc[key]
+
+    resp = ecs.register_task_definition(**reg_kw)
+    new_arn = resp["taskDefinition"]["taskDefinitionArn"]
+    print(f"Registered {new_arn} with {len(env_list)} env var(s) for {family}")
+    return new_arn
 
 
 def _wait_function_updated(unit: str, region: str) -> None:
@@ -76,10 +139,12 @@ WORKDIR /build
 COPY wheelhouse/ /build/wheelhouse/
 COPY handlers-assets/ /build/assets/
 COPY packages.txt /build/packages.txt
+COPY lambda_index_shim.py /build/lambda_index_shim.py
 RUN python3.12 -m pip install --upgrade pip setuptools wheel -q \\
  && mkdir -p /build/output \\
  && python3.12 -m pip install --no-cache-dir --no-index --find-links /build/wheelhouse --target /build/output -r /build/packages.txt \\
  && cp /build/assets/lambda_router.py /build/output/ \\
+ && cp /build/lambda_index_shim.py /build/output/index.py \\
  && if [ -f /build/assets/handlers_config.json ]; then cp /build/assets/handlers_config.json /build/output/; fi \\
  && if [ -d /build/assets/extras ]; then cp -a /build/assets/extras /build/output/extras; fi \\
  && cd /build/output \\
@@ -117,6 +182,10 @@ def cmd_build(args: argparse.Namespace) -> int:
         (build_dir / "packages.txt").write_text(
             "\n".join(install_specs) + "\n", encoding="utf-8"
         )
+        if not INDEX_SHIM.is_file():
+            print(f"missing {INDEX_SHIM}", file=sys.stderr)
+            return 1
+        shutil.copy2(INDEX_SHIM, build_dir / "lambda_index_shim.py")
         entry = _SCRIPTS / "ecs_handler_entrypoint.py"
         if args.large:
             if not entry.is_file():
@@ -251,7 +320,27 @@ def cmd_push(args: argparse.Namespace) -> int:
     )
     _run(["docker", "tag", image, ecr])
     _run(["docker", "push", ecr])
-    print(f"Pushed {ecr} (task definition family {unit}-ecs already from peer CDK)")
+    print(f"Pushed {ecr}")
+
+    env_json = str(getattr(args, "env_json", "") or "").strip()
+    if env_json:
+        extra = _load_env_json(env_json)
+        try:
+            sync_peer_ecs_task_env(
+                args.env_name,
+                args.peer_id,
+                extra,
+                region=region,
+                log=True,
+            )
+        except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
+            print(f"ERROR: peer ECS task env: {exc}", file=sys.stderr)
+            return 1
+    else:
+        print(
+            f"task definition family {unit}-ecs unchanged "
+            "(pass --env-json to sync runtime env from deploy-input)"
+        )
     return 0
 
 
@@ -282,17 +371,45 @@ def main() -> int:
         help="SSM deploy-input VARS/SECRETS JSON; table names always come from --env-name",
     )
 
+    s = sub.add_parser("sync-ecs-env", help="Register a new ECS task-def revision with deploy-input runtime env")
+    add_identity(s)
+    s.add_argument("--region", default="")
+    s.add_argument(
+        "--env-json",
+        required=True,
+        help="SSM deploy-input VARS/SECRETS JSON (same as publish --env-json)",
+    )
+
     u = sub.add_parser("push", help="Tag/push ECS image to the peer ECR repo")
     add_identity(u)
     u.add_argument("--image", default="")
     u.add_argument("--region", default="")
     u.add_argument("--account", default="")
+    u.add_argument(
+        "--env-json",
+        default="",
+        help="SSM deploy-input VARS/SECRETS JSON; registers a new task-def revision with runtime env",
+    )
 
     args = parser.parse_args()
     if args.cmd == "build":
         return cmd_build(args)
     if args.cmd == "publish":
         return cmd_publish(args)
+    if args.cmd == "sync-ecs-env":
+        region = args.region or os.environ.get("AWS_REGION") or "us-east-1"
+        try:
+            sync_peer_ecs_task_env(
+                args.env_name,
+                args.peer_id,
+                _load_env_json(args.env_json),
+                region=region,
+                log=True,
+            )
+        except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
+            print(f"ERROR: peer ECS task env: {exc}", file=sys.stderr)
+            return 1
+        return 0
     return cmd_push(args)
 
 

@@ -13,10 +13,19 @@ from pathlib import Path
 from typing import Any
 
 _SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
-if str(_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS))
+_CDK = Path(__file__).resolve().parent
+for _p in (_CDK, _SCRIPTS):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
 from lambda_env import peer_base_env  # noqa: E402
+from extension_actions import (  # noqa: E402
+    extra_action_roots,
+    load_extension_config,
+    peer_actions_policy_name,
+    peer_actions_specs,
+)
+from extension_infra import ExtensionStack, platform_vector_bucket  # noqa: E402
 
 from aws_cdk import (
     CfnCondition,
@@ -37,6 +46,7 @@ from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as aws_lambda_
 from aws_cdk import aws_logs as logs
 from aws_cdk import aws_s3 as s3
+from aws_cdk import aws_ssm as ssm
 from constructs import Construct
 
 from github_oidc import github_environment_sub_claims
@@ -81,9 +91,28 @@ def handlers_lambda_function_name(env_name: str, peer_id: str | None = None) -> 
     return handlers_unit_name(env_name, peer_id)
 
 
-def handlers_lambda_environment(env_name: str) -> aws_lambda_.CfnFunction.EnvironmentProperty:
-    """WL_NAME + `{env}_*` DynamoDB tables. Overflow identity stays off peers."""
-    return aws_lambda_.CfnFunction.EnvironmentProperty(variables=peer_base_env(env_name))
+_SKIP_PEER_EXTENSION_ENV = frozenset(
+    {
+        "EXTERNAL_HANDLERS",
+        "EXTERNAL_HANDLERS_HEAVY",
+        "EXTERNAL_HANDLERS_ECS_HANDLERS",
+        "ActionsPolicyArn",
+        "ActionsPolicyName",
+        "ExtensionPath",
+    }
+)
+
+
+def handlers_lambda_environment(
+    env_name: str, extra: dict[str, Any] | None = None
+) -> aws_lambda_.CfnFunction.EnvironmentProperty:
+    """WL_NAME + `{env}_*` DynamoDB tables + peer extension runtime outputs."""
+    variables: dict[str, Any] = dict(peer_base_env(env_name))
+    for key, value in (extra or {}).items():
+        if key in _SKIP_PEER_EXTENSION_ENV or value is None or value == "":
+            continue
+        variables[str(key)] = value
+    return aws_lambda_.CfnFunction.EnvironmentProperty(variables=variables)
 
 
 def handlers_policy_name(env_name: str, peer_id: str | None = None) -> str:
@@ -420,12 +449,17 @@ class ComputeStack(Construct):
         handlers_network_params: dict[str, Any] | None = None,
         peer_id: str | None = None,
         package_registry: dict | None = None,
+        extension_handles: list[str] | None = None,
+        extensions_root: Path | None = None,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         self._peer_id = (peer_id or "").strip() or None
         self._package_registry = package_registry
+        self._extension_handles = [str(h).strip() for h in (extension_handles or []) if str(h).strip()]
+        self._extensions_root = Path(extensions_root) if extensions_root else None
+        self._extension_runtime_env: dict[str, Any] = {}
         unit = handlers_unit_name(env_name, self._peer_id)
         self._unit = unit
         peer_id = self._peer_id
@@ -584,6 +618,9 @@ class ComputeStack(Construct):
             description=DESCRIPTION,
         )
         self.handlers_lambda_role = handlers_lambda_role
+        self._extension_runtime_env = self._provision_extension_infra(
+            env_name, aws_account, aws_region
+        )
 
         handlers_lambda_log_group = logs.LogGroup(
             self,
@@ -594,6 +631,8 @@ class ComputeStack(Construct):
 
         # Seed ZipFile is always unpacked as index.py; peer_packager publish
         # overwrites Handler to lambda_router.lambda_handler with the real zip.
+        # CDK updates reset Handler even when they leave the zip — deploy_peer_cdk.sh
+        # pins it back after deploy.
         handlers_fn = aws_lambda_.CfnFunction(
             self,
             "HandlersLambda",
@@ -610,7 +649,9 @@ class ComputeStack(Construct):
             timeout=900,
             memory_size=512,
             description=DESCRIPTION,
-            environment=handlers_lambda_environment(env_name),
+            environment=handlers_lambda_environment(
+                env_name, getattr(self, "_extension_runtime_env", None)
+            ),
         )
         handlers_fn.add_dependency(handlers_lambda_role.node.default_child)  # type: ignore[arg-type]
         handlers_fn.cfn_options.deletion_policy = CfnDeletionPolicy.DELETE
@@ -799,6 +840,60 @@ class ComputeStack(Construct):
         existing = getattr(self, "stable_outputs", None) or {}
         self.stable_outputs = {**existing, **oidc_outputs}
 
+    def _provision_extension_infra(
+        self, env_name: str, aws_account: str, aws_region: str
+    ) -> dict[str, Any]:
+        """Create each catalog extension's buckets/indexes/policy on this peer stack."""
+        if not self._peer_id or not self._extension_handles:
+            return {}
+        workspace = self._extensions_root or _CDK.parents[3]
+        extra = extra_action_roots(Path(__file__).resolve().parent)
+        specs = peer_actions_specs(
+            self._extension_handles,
+            workspace,
+            extra_roots=extra,
+            required=True,
+        )
+        roles: list[Any] = [getattr(self, "handlers_lambda_role", None)]
+        task_role = getattr(self, "handlers_ecs_task_role", None)
+        if task_role is not None:
+            roles.append(task_role)
+        vector_name, vector_arn = platform_vector_bucket(env_name, aws_account, aws_region)
+        merged: dict[str, Any] = {}
+        for spec in specs:
+            ext = ExtensionStack(
+                self,
+                f"Ext{spec.handle}",
+                env_name=env_name,
+                aws_account=aws_account,
+                extension_folder=spec.folder,
+                manifest=spec.manifest,
+                extension_config=load_extension_config(spec.folder),
+                compute_type="lambda_only" if task_role is None else "fargate",
+                attach_to=roles,
+                policy_name_override=peer_actions_policy_name(
+                    env_name, self._peer_id, spec.handle
+                ),
+                platform_vector_bucket_name=vector_name,
+                platform_vector_bucket_arn=vector_arn,
+            )
+            merged.update(ext.runtime_outputs)
+        publishable = {
+            k: v
+            for k, v in merged.items()
+            if k not in _SKIP_PEER_EXTENSION_ENV and v is not None and v != ""
+        }
+        if publishable:
+            ssm.CfnParameter(
+                self,
+                "PeerExtensionVars",
+                name=f"/{env_name}/bootstrap/peer-extension-vars/{self._peer_id}",
+                type="String",
+                tier="Standard",
+                value=Fn.to_json_string(publishable),
+            )
+        return merged
+
     def _provision_lambda_only(
         self,
         env_name: str,
@@ -838,6 +933,9 @@ class ComputeStack(Construct):
             description=DESCRIPTION,
         )
         self.handlers_lambda_role = handlers_lambda_role
+        self._extension_runtime_env = self._provision_extension_infra(
+            env_name, aws_account, aws_region
+        )
         handlers_lambda_log_group = logs.LogGroup(
             self,
             "HandlersLambdaLogGroup",
@@ -846,6 +944,8 @@ class ComputeStack(Construct):
         )
         # Seed ZipFile is always unpacked as index.py; peer_packager publish
         # overwrites Handler to lambda_router.lambda_handler with the real zip.
+        # CDK updates reset Handler even when they leave the zip — deploy_peer_cdk.sh
+        # pins it back after deploy.
         handlers_fn = aws_lambda_.CfnFunction(
             self,
             "HandlersLambda",
@@ -862,7 +962,9 @@ class ComputeStack(Construct):
             timeout=900,
             memory_size=512,
             description=DESCRIPTION,
-            environment=handlers_lambda_environment(env_name),
+            environment=handlers_lambda_environment(
+                env_name, getattr(self, "_extension_runtime_env", None)
+            ),
         )
         handlers_fn.add_dependency(handlers_lambda_role.node.default_child)  # type: ignore[arg-type]
         handlers_fn.cfn_options.deletion_policy = CfnDeletionPolicy.DELETE
@@ -919,6 +1021,14 @@ class ComputeStack(Construct):
             "handler",
             image=ecs.ContainerImage.from_registry(ecr_uri),
             essential=True,
+            environment={
+                **peer_base_env(env_name),
+                **{
+                    k: v
+                    for k, v in (getattr(self, "_extension_runtime_env", None) or {}).items()
+                    if k not in _SKIP_PEER_EXTENSION_ENV and v is not None and v != ""
+                },
+            },
             logging=ecs.LogDrivers.aws_logs(
                 stream_prefix="ecs",
                 log_group=log_group,
