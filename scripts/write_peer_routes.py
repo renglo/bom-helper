@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Merge peer-stack CloudFormation outputs into SSM handle → peer map.
 
-Each handle also gets ``heavy_handlers`` from that extension's
-``handlers_config.json`` so the hub can classify light vs heavy without
-Lambda env blobs. Run after ``cdk deploy`` of ``{env}-peer-{peerId}``.
+Routes are handle → lambda/ECS endpoints only. Handler catalogs stay on
+each extension's ``handlers_config.json`` (the peer). Run after
+``cdk deploy`` of ``{env}-peer-{peerId}``.
 
     python scripts/write_peer_routes.py deploy_targets.yml \\
         --env-name acme0813 --region us-east-1
@@ -57,69 +57,11 @@ def _csv_list(raw: str) -> list[str]:
     return [part.strip() for part in (raw or "").split(",") if part.strip()]
 
 
-def _search_roots(targets_file: Path | None = None) -> list[Path]:
-    roots = [Path.cwd()]
-    if targets_file:
-        resolved = targets_file.resolve()
-        roots.append(resolved.parent)
-        roots.append(resolved.parent.parent)
-    here = Path(__file__).resolve()
-    roots.extend(here.parents[i] for i in range(1, min(5, len(here.parents))))
-    out: list[Path] = []
-    seen: set[Path] = set()
-    for root in roots:
-        try:
-            path = root.resolve()
-        except OSError:
-            continue
-        if path not in seen:
-            seen.add(path)
-            out.append(path)
-    return out
-
-
-def _heavy_handlers_from_config(path: Path) -> list[str]:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return []
-    raw = data.get("heavy_handlers")
-    if not isinstance(raw, list):
-        raw = data.get("ecs_handlers")
-    if not isinstance(raw, list):
-        return []
-    seen: list[str] = []
-    for item in raw:
-        name = str(item).strip().lower()
-        if name and name not in seen:
-            seen.append(name)
-    return seen
-
-
-def heavy_handlers_for_extension(
-    handle: str, roots: list[Path] | None = None
-) -> list[str]:
-    handle = (handle or "").strip()
-    if not handle:
-        return []
-    rels = (
-        Path("extensions") / handle / "package" / "handlers_config.json",
-        Path(handle) / "package" / "handlers_config.json",
-    )
-    for root in roots or _search_roots():
-        for rel in rels:
-            path = root / rel
-            if path.is_file():
-                return _heavy_handlers_from_config(path)
-    return []
-
-
 def _route_from_outputs(
     extensions: list[str],
     outputs: dict[str, str],
     region: str,
     account: str,
-    heavy_by_ext: dict[str, list[str]] | None = None,
 ) -> dict[str, Any]:
     fn = _output(outputs, "HandlersLambdaFunctionName")
     if not fn:
@@ -144,14 +86,7 @@ def _route_from_outputs(
         route["launch_type"] = launch_type
     if network_mode:
         route["network_mode"] = network_mode
-    out: dict[str, Any] = {}
-    for ext in extensions:
-        row = dict(route)
-        names = (heavy_by_ext or {}).get(ext) or []
-        if names:
-            row["heavy_handlers"] = names
-        out[ext] = row
-    return out
+    return {ext: dict(route) for ext in extensions}
 
 
 def _put_ssm(name: str, payload: dict[str, Any], region: str, *, dry_run: bool) -> None:
@@ -251,20 +186,7 @@ def main() -> int:
         if not outputs:
             print(f"skip {stack} (no outputs)")
             continue
-        roots = _search_roots(Path(args.targets_file))
-        heavy_by_ext: dict[str, list[str]] = {}
-        for ext in peer["extensions"]:
-            names = heavy_handlers_for_extension(ext, roots)
-            if not names:
-                print(
-                    f"warning: no heavy_handlers for {ext} "
-                    "(missing extensions/{ext}/package/handlers_config.json?)",
-                    file=sys.stderr,
-                )
-            heavy_by_ext[ext] = names
-        route = _route_from_outputs(
-            peer["extensions"], outputs, region, account, heavy_by_ext=heavy_by_ext
-        )
+        route = _route_from_outputs(peer["extensions"], outputs, region, account)
         if not route:
             print(
                 f"skip {stack} (no HandlersLambdaFunctionName output)",

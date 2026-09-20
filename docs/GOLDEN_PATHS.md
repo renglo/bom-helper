@@ -1,4 +1,4 @@
-# Golden paths: sync+light and async+heavy
+# Golden paths: sync and async (/start)
 
 Production remote only (not laptop Docker / in-process). The hub is Stack A/B `renglo-api` (`{env}-backend-{stage}`). A peer is `{env}-peer-{peerId}` (zip Lambda) plus, when `compute` is `fargate`/`ec2`, `{env}-peer-{peerId}-ecs`.
 
@@ -11,8 +11,8 @@ Production remote only (not laptop Docker / in-process). The hub is Stack A/B `r
 | API Gateway | HTTPS to the hub |
 | Hub | `renglo-api` Lambda |
 | SSM | `/{env}/bootstrap/peer-routes` (handle → peer) |
-| Peer light | `{env}-peer-{peerId}` Lambda (zip upload) |
-| Peer heavy | `{env}-peer-{peerId}-ecs` cluster / task |
+| Peer zip | `{env}-peer-{peerId}` Lambda (sync calls) |
+| Peer ECS | `{env}-peer-{peerId}-ecs` cluster / task (`/start` only) |
 | S3 | Peer results bucket `{env}-peer-{peerId}-ecs-{account}` |
 
 IDs that show up in **logs only** (AWS mints them; the product does not poll them): API Gateway request id, hub Lambda request id, peer Lambda request id. Cognito `jti` / `sub` travel as `_jwt_claims` on the payload; they are not the job id.
@@ -21,11 +21,11 @@ URL `portfolio` / `org` / handle come from the console session. They are tenant 
 
 ---
 
-## 1. Sync + light
+## 1. Sync
 
 Example: `POST /staging/_schd/<portfolio>/<org>/call/arbitiumtriage/blast_radius`
 
-The handler is **not** in `heavy_handlers`. Frontend waits on one HTTP response. **No platform `request_id`. No ECS `task_id`.**
+Frontend waits on one HTTP response. **No platform `request_id`. No ECS `task_id`.**
 
 ```mermaid
 sequenceDiagram
@@ -33,7 +33,7 @@ sequenceDiagram
   participant APIGW as API Gateway
   participant Hub as Hub API
   participant SSM as peer-routes SSM
-  participant Zip as Peer light Lambda
+  participant Zip as Peer zip Lambda
 
   FE->>APIGW: POST /call/{handle}/{handler}<br/>Bearer access token
   APIGW->>Hub: forward
@@ -54,15 +54,15 @@ sequenceDiagram
 | Run handler | Peer zip | AWS Lambda request id (logs) | Payload `portfolio` / `org` / `_jwt_claims` |
 | Response | Hub → Frontend | No | Same HTTP body; nothing to poll |
 
-If this path returns 200 with handler output, light smoke on that handle is done.
+If this path returns 200 with handler output, sync smoke on that handle is done.
 
 ---
 
-## 2. Async + heavy
+## 2. Async (`/start`)
 
 Example: `POST /staging/_schd/<portfolio>/<org>/call/arbitiumtriage/aws_aid_orchestrator/start`
 
-The handler **is** in `heavy_handlers`. Frontend gets a job mailbox, then polls. Two product ids:
+The console chooses `/start` for long work. Frontend gets a job mailbox, then polls. Two product ids:
 
 - **`request_id`** — UUID minted by the **hub**. S3 keys and poll query string.
 - **`task_id`** — minted by **ECS** (`run_task` ARN tail). Logs / stop-task. Frontend does not poll it.
@@ -113,7 +113,7 @@ sequenceDiagram
 
 Hub never fans out N zip invokes under this id. One `/start` = one mailbox = one task. Work that looks like “many calls” happens **inside** that task.
 
-Heavy smoke: 202 with `request_id`, then `/async/result` `status: completed`, and the task runs on `{env}-peer-{peerId}-ecs` (not `{env}-handlers-ecs`). `/batch/result` and `/batch/status` remain aliases during soak.
+Async smoke: 202 with `request_id`, then `/async/result` `status: completed`, and the task runs on `{env}-peer-{peerId}-ecs`.
 
 ---
 
@@ -121,5 +121,5 @@ Heavy smoke: 202 with `request_id`, then `/async/result` `status: completed`, an
 
 | Pair | Why not |
 | --- | --- |
-| Async + light | Production `/start` rejects names that are not in `heavy_handlers`. |
-| Sync + heavy | Code can wait on ECS inside the hub HTTP request (`call_ecs_handler`, 15 min poll). Do not use for smoke; API Gateway will usually die first. |
+| Sync for long jobs | API Gateway and the peer zip Lambda time out; use `/start` instead. |
+| `/start` on `lambda_only` peers | No ECS cluster on that peer; use a `fargate`/`ec2` peer or sync only. |

@@ -2,7 +2,7 @@
 
 A **Peer** is the service unit: own IAM, zip Lambda, optional ECS cluster, pin file, deploy cadence, optional region. An ECS **cluster** is only capacity *inside* a peer whose catalog `compute` is `fargate` or `ec2`. A `lambda_only` peer has no cluster.
 
-The API (Stack A + Stack B) is the hub, not a peer. `renglo-api` maps **handle → peer**, then **light vs heavy** inside that peer (`heavy_handlers` → that peer’s zip vs that peer’s `run_task`).
+The API (Stack A + Stack B) is the hub, not a peer. `renglo-api` maps **handle → peer**, then **sync vs `/start`**: sync invokes the peer zip Lambda; `/start` runs a task on that peer’s ECS cluster (when `compute` is `fargate`/`ec2`). There is no per-handler heavy catalog.
 
 Catalog and pin files live in the tenant `*-bom` repo. CDK and packager live in **bom-helper**. Peer rows stay in `deploy_targets.yml`; platform identity (`env_name`, BOM git id) is shared with bootstrap via `**launcher/cdk/customer-config.json`** — the same file Stack A/B already use.
 
@@ -113,9 +113,9 @@ Put each kind of change in exactly one place. If it is not in this table, it is 
 | Which peers exist, who they serve, compute shape          | `deploy_targets.yml`                                                                     | `peers.<id>`                                                                          |
 | Python/library pins for **one** peer                      | `peers_bom/<id>/vX.Y.Z.json`                                                             | `python`, `repos`                                                                     |
 | Overflow zip (dual-run only, all handles in one artifact) | `handlers_bom/vX.Y.Z.json`                                                               | leave until [OVERFLOW_TEARDOWN.md](OVERFLOW_TEARDOWN.md)                              |
-| Which handlers are heavy vs light                         | `extensions/<handle>/package/handlers_config.json`                                       | `heavy_handlers` (legacy `ecs_handlers` still read)                                   |
+| Handler name → class (peer runtime)                       | `extensions/<handle>/package/handlers_config.json`                                       | `handlers` only                                                                       |
 | Membership list `EXTERNAL_HANDLERS`                       | **Do not hand-edit.** Union of `peers.*.extensions` (CI overlay `--targets`)             | `ops/bom-helper/scripts/peers.py`                                                     |
-| Dual-run overlay (heavy handler names, FE URL)            | `platform_env.yml` → hub API Lambda env (not peer Lambdas)                               | `EXTERNAL_HANDLERS_HEAVY`, etc.                                                       |
+| Console / FE URL overlay                                  | `platform_env.yml` → hub API Lambda env (not peer Lambdas)                               | `APP_FE_BASE_URL`, etc.                                                               |
 | Handle → Lambda ARN / ECS cluster (runtime)               | SSM `/{env}/bootstrap/peer-routes` (not Lambda env, not platform-vars)                   | `python scripts/write_peer_routes.py …`                                               |
 | Peer Lambda runtime env (tables, `WL_NAME`, secrets)      | SSM `/{env}/bootstrap/deploy-input` + packager                                           | `peer_packager.py publish --env-json`; tables are always `{env}_*`                    |
 | Laptop routing                                            | `dev/renglo-api/env_config.py`                                                           | `EXTERNAL_HANDLERS_PEER_MAP`, `EXTERNAL_HANDLERS_PEER_ROUTING`                        |
@@ -208,21 +208,21 @@ Create `peers_bom/<peer_id>/v0.0.1.json`. Pin only the wheels **this peer serves
 
 `deploy_stage` chooses the GitHub Environment / OIDC role (`staging` vs `production`).
 
-### 1c. Heavy vs light — extension package (only if this peer has heavies)
+### 1c. Handler catalog — extension package
 
 Edit `extensions/<handle>/package/handlers_config.json` in the **extension** repo (not the BOM):
 
 ```json
 {
-  "heavy_handlers": ["<heavy_handler>"],
   "handlers": {
-    "<handler>": "<handle>.handlers.<handler>.<Class>",
-    "<heavy_handler>": "<handle>.handlers.<heavy_handler>.<Class>"
+    "<handler>": "<handle>.handlers.<handler>.<Class>"
   }
 }
 ```
 
-`lambda_only` peers cannot run `heavy_handlers`. Put those handles on a `fargate`/`ec2` peer, or keep them light.
+Long work uses the console **`/start`** route (peer ECS). Quick work uses sync **`/call/.../handler`**. No `heavy_handlers` list — the API path is the contract.
+
+`lambda_only` peers have no ECS cluster; `/start` on those handles will fail until the peer is `fargate`/`ec2`.
 
 ### 1d. First provision — laptop / admin role
 
@@ -307,9 +307,9 @@ EXTERNAL_HANDLERS_PEER_MAP = '{"<handle>":{"lambda_arn":"arn:aws:lambda:…:func
 
 ### 1f. Smoke
 
-Call one **light** handler on the new handle. If the peer is `fargate`/`ec2`, also one name listed in `heavy_handlers`. Stack A/B are not redeployed.
+Call one **sync** handler on the new handle. If the peer is `fargate`/`ec2`, also one **`/start`** smoke. Stack A/B are not redeployed.
 
-Who mints which id on each hop: [GOLDEN_PATHS.md](GOLDEN_PATHS.md) (sync+light vs async+heavy).
+Who mints which id on each hop: [GOLDEN_PATHS.md](GOLDEN_PATHS.md) (sync vs `/start`).
 
 Grouping later is the same catalog: several handles on one `extensions:` list, or split to a new peer. No `lambda_router` change.
 
@@ -369,7 +369,7 @@ Publish updates zip and sets Handler to `lambda_router.lambda_handler`. The zip 
 
 Add `--large` on `build` and `peer_packager.py push` when `compute` is `fargate` or `ec2`.
 
-Changing **handler source** (`heavy_handlers`, new handler class) is in the extension package + a new wheel version, then this same pin bump. It is not a CDK change.
+Changing **handler source** (new handler class in `handlers_config.json`) is in the extension package + a new wheel version, then this same pin bump. It is not a CDK change.
 
 ---
 
@@ -385,7 +385,7 @@ Infra vs runtime vs pins:
 | `aws_region`                                                               | `deploy_targets.yml` `peers.<id>.aws_region`                      | CDK deploy in that region (new stack); update routes                                                        |
 | `iam_profile`                                                              | `deploy_targets.yml`                                              | CDK / IAM on **that** peer only (not overflow roles)                                                        |
 | `peers_bom` version                                                        | `deploy_targets.yml` + new JSON under `peers_bom/<id>/`           | `deploy_peers.yml` (path 2)                                                                                 |
-| Light vs heavy                                                             | `extensions/<handle>/package/handlers_config.json` `heavy_handlers` | New wheel + path 2. Peer must already have ECS if you add heavies                                           |
+| New handler in catalog                                                     | `extensions/<handle>/package/handlers_config.json` `handlers`         | New wheel + path 2. Use `/start` in the console for long jobs on `fargate`/`ec2` peers.                    |
 | Kill-switch / laptop map                                                   | `env_config.py` or SSM                                            | No stack change                                                                                             |
 | `helper.ref`                                                               | `deploy_targets.yml`                                              | Next peer CI/CDK uses new bom-helper                                                                        |
 
@@ -409,9 +409,9 @@ bash scripts/deploy_peer_cdk.sh synth --peer-id "$PEER_ID"
 bash scripts/deploy_peer_cdk.sh deploy --peer-id "$PEER_ID"
 ```
 
-CloudFormation adds cluster, ECR, task definition, results bucket, task role. Then `write_peer_routes.py` (so SSM gets `ecs_cluster` / bucket) and **Deploy Peers** with `--large`. Until that finishes, `heavy_handlers` on this peer fail (`run_task` has no cluster).
+CloudFormation adds cluster, ECR, task definition, results bucket, task role. Then `write_peer_routes.py` (so SSM gets `ecs_cluster` / bucket) and **Deploy Peers** with `--large`. Until that finishes, `/start` on this peer fails (`run_task` has no cluster).
 
-Going **down** (`fargate` → `lambda_only`) deletes ECS resources. Move or drop heavies in `handlers_config.json` first, ship that wheel, then CDK.
+Going **down** (`fargate` → `lambda_only`) deletes ECS resources. Stop using `/start` on that peer first, then CDK.
 
 Fargate size only (`task_size: large`) or EC2 instance/ASG: same class — catalog edit + that peer’s CDK deploy, not an API stack deploy.
 
@@ -502,7 +502,7 @@ Assume the peer **stack already exists** (§1d). Order matters.
 2. deploy_targets    placement (`hub.python`, `peers.<id>.python`) + `packages:` slots — edit when membership changes
 3. adopt             git convoy adopt --bom ops/<tenant>-bom  →  bom/, console_bom/, peers_bom/<id>/
 4. *-bom main        commit + push  →  deploy.yml / deploy_console.yml / deploy_peers.yml
-5. Smoke             light + one heavy handler on that peer (§1f)
+5. Smoke             sync + one `/start` on that peer (§1f)
 ```
 
 **1 — Extension code (git-convoy feature path)**

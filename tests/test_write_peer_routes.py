@@ -10,11 +10,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from write_peer_routes import (  # noqa: E402
-    _output,
-    _route_from_outputs,
-    heavy_handlers_for_extension,
-)
+from write_peer_routes import _output, _route_from_outputs  # noqa: E402
 
 
 class CfnOutputMatchTests(unittest.TestCase):
@@ -59,33 +55,6 @@ class CfnOutputMatchTests(unittest.TestCase):
         self.assertEqual(route["arbitiumlab"]["launch_type"], "fargate")
         self.assertEqual(route["arbitiumlab"]["network_mode"], "awsvpc")
         self.assertNotIn("heavy_handlers", route["arbitiumlab"])
-
-    def test_route_embeds_heavy_handlers(self) -> None:
-        route = _route_from_outputs(
-            ["arbitiumlab", "arbitiumtriage"],
-            {"HandlersLambdaFunctionName": "acme0813-peer-lab"},
-            "us-east-1",
-            "123",
-            heavy_by_ext={"arbitiumlab": ["aws_threats"], "arbitiumtriage": []},
-        )
-        self.assertEqual(route["arbitiumlab"]["heavy_handlers"], ["aws_threats"])
-        self.assertNotIn("heavy_handlers", route["arbitiumtriage"])
-
-    def test_heavy_handlers_from_package_config(self) -> None:
-        import tempfile
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            pkg = root / "extensions" / "acmewidget" / "package"
-            pkg.mkdir(parents=True)
-            (pkg / "handlers_config.json").write_text(
-                '{"heavy_handlers": ["orch", "aws_threats"]}',
-                encoding="utf-8",
-            )
-            self.assertEqual(
-                heavy_handlers_for_extension("acmewidget", [root]),
-                ["orch", "aws_threats"],
-            )
 
     def test_missing_function_name_is_empty(self) -> None:
         self.assertEqual(
