@@ -72,6 +72,43 @@ def stage_extension_blueprints(
     return dest
 
 
+def stage_extension_installer(
+    *,
+    extension_root: Path | None = None,
+    package_dir: Path | None = None,
+) -> Path | None:
+    """Copy ``<root>/installer/infra`` into ``package/<import>/installer/infra``.
+
+    Peer / hub CDK then read that tree from the published wheel (same pin as
+    runtime code). Does not move the git source of truth.
+    """
+    if package_dir is not None:
+        package_dir = Path(package_dir).resolve()
+        root = package_dir.parent
+    elif extension_root is not None:
+        root = Path(extension_root).resolve()
+        package_dir = root / "package"
+    else:
+        root = Path.cwd().resolve()
+        package_dir = root / "package"
+
+    src = root / "installer" / "infra"
+    if not src.is_dir() or not (src / "cdk_extension.json").is_file():
+        return None
+
+    import_pkg = find_import_package(package_dir)
+    if import_pkg is None:
+        raise FileNotFoundError(
+            f"No import package (directory with __init__.py) under {package_dir}"
+        )
+
+    dest = import_pkg / "installer" / "infra"
+    if dest.exists():
+        shutil.rmtree(dest)
+    shutil.copytree(src, dest)
+    return dest
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -89,14 +126,19 @@ def main() -> int:
     package_dir = Path(args.package_dir) if args.package_dir else None
     try:
         dest = stage_extension_blueprints(extension_root=root, package_dir=package_dir)
+        infra = stage_extension_installer(extension_root=root, package_dir=package_dir)
     except FileNotFoundError as exc:
         print(str(exc), file=sys.stderr)
         return 1
     if dest is None:
         print(f"No blueprints/*.json under {root.resolve() / 'blueprints'}; nothing to stage.")
-        return 0
-    count = len(list(dest.glob("*.json")))
-    print(f"Staged {count} blueprint(s) into {dest}")
+    else:
+        count = len(list(dest.glob("*.json")))
+        print(f"Staged {count} blueprint(s) into {dest}")
+    if infra is None:
+        print(f"No installer/infra under {root.resolve() / 'installer' / 'infra'}; nothing to stage.")
+    else:
+        print(f"Staged installer/infra into {infra}")
     return 0
 
 

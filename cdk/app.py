@@ -28,6 +28,7 @@ sys.path.insert(0, str(_CDK_DIR))
 sys.path.insert(0, str(_HELPER_ROOT / "scripts"))
 
 from compute_stack import ComputeStack  # noqa: E402
+from installer_from_bom import configure_pip_from_bom, materialize_peer_installers  # noqa: E402
 from peer_deploy_context import load_targets_yaml, resolve_peer_deploy_context  # noqa: E402
 from peers import load_peers, peer_stack_name  # noqa: E402
 from targets import ctx_get as _ctx  # noqa: E402
@@ -126,6 +127,22 @@ def main() -> None:
     selected = [p for p in peers if not want_peer or p["id"] == want_peer]
     if not selected:
         raise SystemExit(f"peer_id {want_peer!r} not in catalog")
+
+    if os.environ.get("INSTALLER_FROM_BOM", "1").strip() not in {"0", "false", "no"}:
+        dest = _CDK_DIR / "extension-actions"
+        try:
+            configure_pip_from_bom(targets_path.parent)
+            rows = materialize_peer_installers(
+                targets_path.parent,
+                dest,
+                peer_id=str(want_peer or ""),
+                workspace=_HELPER_ROOT.parents[1],
+            )
+        except FileNotFoundError as exc:
+            raise SystemExit(f"installer/infra from BOM: {exc}") from exc
+        for row in rows:
+            pin = f" {row['pin']}" if row.get("pin") else ""
+            print(f"installer {row['handle']}: {row['source']}{pin}", file=sys.stderr)
 
     package_registry = None
     raw_registry = ctx.get("package_registry_json") or ""

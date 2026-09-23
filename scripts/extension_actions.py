@@ -230,8 +230,9 @@ def peer_actions_specs(
         if folder is None:
             if required:
                 raise FileNotFoundError(
-                    f"Peer extension {handle!r} has no installer/infra/cdk_extension.json "
-                    f"under {workspace / 'extensions' / handle}"
+                    f"Peer extension {handle!r} has no installer/infra/cdk_extension.json. "
+                    f"Peer CDK loads it from the BOM pin (download that package) or from "
+                    f"{workspace / 'extensions' / handle} during incubation."
                 )
             continue
         spec = load_actions_spec(folder, handle)

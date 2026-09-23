@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +19,21 @@ def package_dir(folder: Path) -> Path:
     raise ExtensionsError(f"no pyproject.toml under {folder}")
 
 
+def _stage_package_assets(folder: Path) -> None:
+    scripts = Path(__file__).resolve().parents[1] / "scripts"
+    if str(scripts) not in sys.path:
+        sys.path.insert(0, str(scripts))
+    from stage_extension_blueprints import (  # noqa: PLC0415
+        stage_extension_blueprints,
+        stage_extension_installer,
+    )
+
+    stage_extension_blueprints(extension_root=folder)
+    stage_extension_installer(extension_root=folder)
+
+
 def build_wheel(folder: Path) -> Path:
+    _stage_package_assets(folder)
     root = package_dir(folder)
     dist = root / "dist"
     if dist.is_dir():
