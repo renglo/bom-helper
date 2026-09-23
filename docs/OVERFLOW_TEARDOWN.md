@@ -40,9 +40,11 @@ Deletes Lambda `{env}-handlers`, its log group, ECS cluster/task family `{env}-h
 
 ## 2. Stack B peel (git)
 
-In `ops/launcher/cdk/stacks/stack_b.py`: stop instantiating `ComputeStack`; stop importing `compute_stack.py` from extensions-service. Remove `compute_type`, `ec2_*`, `github_handlers_repo` from `customer-config.json`. Synth Stack B so CloudFormation no longer owns overflow resources (they should already be gone from step 1).
+Done in launcher / bootstrap / renglo-cli: Stack B no longer instantiates `ComputeStack`. Hub `customer-config.json` is identity-only (`env_name`, `github_repo`, email, staging, optional BOM OIDC ids). `renglo system init` no longer copies `compute_type`, `ec2_*`, or `github_handlers_*`. Bootstrap synth no longer copies `compute_stack.py` into the API tree.
 
-`ops/bootstrap`: stop copying `compute_stack.py` / `github_oidc.py` from extensions-service for API synth. Order is Stack A → Stack B (API) → peer stacks.
+Order is Stack A → Stack B (API) → peer stacks. `ComputeStack` remains in **bom-helper** for `{env}-peer-*` only.
+
+After this peel, synth Stack B so CloudFormation no longer owns overflow resources (they should already be gone from step 1).
 
 ## 3. CI / BOM
 
