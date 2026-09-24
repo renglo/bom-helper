@@ -1,0 +1,92 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadIdentity",
+      "Effect": "Allow",
+      "Action": "sts:GetCallerIdentity",
+      "Resource": "*"
+    },
+    {
+      "Sid": "S3ThreatEventsBucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:HeadBucket",
+        "s3:GetBucketLocation",
+        "s3:PutBucketTagging",
+        "s3:GetBucketTagging",
+        "s3:ListBucket",
+        "s3:ListBucketVersions",
+        "s3:DeleteBucket"
+      ],
+      "Resource": "arn:aws:s3:::__ENV_NAME__-threat-events-__ACCOUNT_ID__"
+    },
+    {
+      "Sid": "S3ThreatEventsObjects",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:DeleteObjectVersion",
+        "s3:DeleteObjects"
+      ],
+      "Resource": "arn:aws:s3:::__ENV_NAME__-threat-events-__ACCOUNT_ID__/*"
+    },
+    {
+      "Sid": "IamActionsPolicy",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetPolicy",
+        "iam:CreatePolicy",
+        "iam:ListPolicyVersions",
+        "iam:GetPolicyVersion",
+        "iam:CreatePolicyVersion",
+        "iam:DeletePolicyVersion",
+        "iam:DeletePolicy"
+      ],
+      "Resource": "arn:aws:iam::__ACCOUNT_ID__:policy/__ENV_NAME___actions_tt_policy"
+    },
+    {
+      "Sid": "IamAttachActionsPolicyToRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRole",
+        "iam:ListAttachedRolePolicies",
+        "iam:AttachRolePolicy",
+        "iam:DetachRolePolicy"
+      ],
+      "Resource": [
+        "arn:aws:iam::__ACCOUNT_ID__:role/__ENV_NAME___tt_role",
+        "arn:aws:iam::__ACCOUNT_ID__:role/__ENV_NAME__-handlers-role",
+        "arn:aws:iam::__ACCOUNT_ID__:role/__ENV_NAME__-handlers-ecs-task"
+      ]
+    },
+    {
+      "Sid": "IamReadPlatformTTPolicy",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetPolicy",
+        "iam:ListAttachedRolePolicies"
+      ],
+      "Resource": [
+        "arn:aws:iam::__ACCOUNT_ID__:policy/__ENV_NAME___tt_policy",
+        "arn:aws:iam::__ACCOUNT_ID__:role/__ENV_NAME___tt_role"
+      ]
+    },
+    {
+      "Sid": "DynamoBlueprintsUpload",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:PutItem"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:__REGION__:__ACCOUNT_ID__:table/__ENV_NAME___blueprints",
+        "arn:aws:dynamodb:__REGION__:__ACCOUNT_ID__:table/__ENV_NAME___blueprints/index/*"
+      ]
+    }
+  ]
+}
