@@ -34,8 +34,7 @@ class PeerMatrixTests(unittest.TestCase):
                     }
                 },
                 "tenants": {
-                    "acme": {
-                        "id": "acme0813",
+                    "acme0813": {
                         "aws_account": "111122223333",
                         "aws_region": "us-east-1",
                         "stages": {"staging": {"enabled": True}},

@@ -44,8 +44,8 @@ peers:
       - arbitium-lab
     peers_bom: 0.1.8
 tenants:
-  acme:
-    id: acme0813
+  acme0813:
+    aws_account: "111122223333"
 """
 
 

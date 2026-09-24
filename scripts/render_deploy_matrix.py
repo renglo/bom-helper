@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Read deploy_targets.yml and print JSON suitable for matrix.fromJson.
 
-Nested schema:
+Nested schema. The tenants: key is the AWS prefix (customer-config env_name):
   tenants:
-    <tenant_key>:
-      id: <aws_prefix>
+    <env_prefix>:
       aws_account: "..."
       aws_region: us-east-1   # optional
       stages:
@@ -164,11 +163,11 @@ def _iter_tenant_stages(data: dict) -> list[dict[str, Any]]:
         if not isinstance(tenant_cfg, dict):
             continue
         tenant = str(tenant_key).strip()
-        env_id = str(tenant_cfg.get("id", "")).strip()
+        env_id = tenant
         account = str(tenant_cfg.get("aws_account", "")).strip()
         region = str(tenant_cfg.get("aws_region", DEFAULT_AWS_REGION)).strip() or DEFAULT_AWS_REGION
         stages = tenant_cfg.get("stages") or {}
-        if not tenant or not env_id or not account or not isinstance(stages, dict):
+        if not tenant or not account or not isinstance(stages, dict):
             print(f"Skipping invalid tenant config: {tenant_key!r}")
             continue
 
@@ -207,11 +206,11 @@ def _handlers_rows(data: dict, repo_root: Path) -> list[dict[str, Any]]:
         if not isinstance(tenant_cfg, dict):
             continue
         tenant = str(tenant_key).strip()
-        env_id = str(tenant_cfg.get("id", "")).strip()
+        env_id = tenant
         account = str(tenant_cfg.get("aws_account", "")).strip()
         region = str(tenant_cfg.get("aws_region", DEFAULT_AWS_REGION)).strip() or DEFAULT_AWS_REGION
         stages = tenant_cfg.get("stages") or {}
-        if not tenant or not env_id or not account:
+        if not tenant or not account:
             continue
         if not isinstance(stages, dict):
             continue
@@ -245,11 +244,11 @@ def _peer_rows(data: dict, repo_root: Path) -> list[dict[str, Any]]:
         if not isinstance(tenant_cfg, dict):
             continue
         tenant = str(tenant_key).strip()
-        env_id = str(tenant_cfg.get("id", "")).strip()
+        env_id = tenant
         account = str(tenant_cfg.get("aws_account", "")).strip()
         tenant_region = str(tenant_cfg.get("aws_region", DEFAULT_AWS_REGION)).strip() or DEFAULT_AWS_REGION
         stages = tenant_cfg.get("stages") or {}
-        if not tenant or not env_id or not account:
+        if not tenant or not account:
             continue
         if not isinstance(stages, dict):
             continue

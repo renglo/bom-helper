@@ -31,12 +31,13 @@ def github_repo_checkout_name(github_repo: str) -> str:
 
 
 def tenant_key_for_env(tenants: dict, env_name: str) -> str:
+    """Return ``env_name`` when it is a ``tenants:`` key. The key is the AWS prefix."""
     want = env_name.strip()
     if not want:
         return ""
-    for key, cfg in tenants.items():
-        if isinstance(cfg, dict) and str(cfg.get("id", "")).strip() == want:
-            return str(key).strip()
+    cfg = tenants.get(want)
+    if isinstance(cfg, dict):
+        return want
     return ""
 
 

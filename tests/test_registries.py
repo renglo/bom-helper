@@ -23,7 +23,6 @@ def _base(**overrides):
     data = {
         "tenants": {
             "example": {
-                "id": "acme",
                 "aws_account": "111122223333",
                 "aws_region": "us-east-1",
                 "stages": {"staging": {"enabled": True}},
