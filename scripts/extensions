@@ -1,17 +1,14 @@
 #!/usr/bin/env bash
-# Wrapper when the venv is not activated — prefers bom-helper/bom-venv.
+# The extensions CLI moved to ops/renglo-cli (binary: renglo).
 set -euo pipefail
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VENV_NAME="${BOM_VENV_NAME:-bom-venv}"
-for dir in "$VENV_NAME" bom-venv venv; do
-  if [[ -x "$ROOT/$dir/bin/extensions" ]]; then
-    exec "$ROOT/$dir/bin/extensions" "$@"
-  fi
-  if [[ -x "$ROOT/$dir/bin/python" ]]; then
-    exec "$ROOT/$dir/bin/python" -m extensions_cli "$@"
-  fi
-done
-echo "extensions: run bash setup-venv.sh from ops/bom-helper, then:" >&2
-echo "  source bom-venv/bin/activate" >&2
-echo "  extensions $*" >&2
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if [[ -x "$ROOT/renglo-cli/renglo-venv/bin/renglo" ]]; then
+  exec "$ROOT/renglo-cli/renglo-venv/bin/renglo" extension "$@"
+fi
+if [[ -x "$ROOT/renglo-cli/scripts/renglo" ]]; then
+  exec "$ROOT/renglo-cli/scripts/renglo" extension "$@"
+fi
+echo "The extensions CLI moved to renglo." >&2
+echo "  cd ops/renglo-cli && bash setup_venv.sh && source renglo-venv/bin/activate" >&2
+echo "  renglo extension $*" >&2
 exit 1

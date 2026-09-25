@@ -82,7 +82,7 @@ For tenant id `{env_id}` and peer id `{peer_id}`:
 | OIDC role (staging)      | `GitHubActionsHandlersRole-{env_id}-{peer_id}-staging` |
 
 
-Adding a new extension: [EXTENSIONS.md](EXTENSIONS.md) (`extensions install …`). Manual file list: [NEW_EXTENSION.md](NEW_EXTENSION.md).
+Adding a new extension: [Renglo CLI README](../renglo-cli/README.md) (`renglo extension install …`). Placement and IAM: [EXTENSIONS.md](EXTENSIONS.md). Manual file list: [NEW_EXTENSION.md](NEW_EXTENSION.md).
 
 ## Extension actions IAM
 
@@ -467,13 +467,13 @@ Authority: [`ops/git-convoy/cross-repo-feature-manual.md`](../../git-convoy/cros
 | --- | --- | --- |
 | Edit extension handler / UI code | **Feature** on product repos (`extensions/<handle>/`, …) | `feature adopt` → `feature commit` → `feature prs` → merge to `develop` |
 | Publish extension **wheels** to CodeArtifact | **Train** or **hotfix** (tags → CI) | `train tag-rc` / `train publish`, or `hotfix publish` on extension repos |
-| Deploy **API / console / backend** (Stack A/B) | **Adopt** on `*-bom` `main` | `git convoy adopt --bom ops/<tenant>-bom` writes `bom/`, `console_bom/`, and `peers_bom/<id>/` |
-| Pin wheels for a **peer** zip/ECS | **Adopt** (same train) | Placement in `deploy_targets.yml`; adopt regenerates `peers_bom/<peer_id>/` |
+| Deploy **API / console / backend** (Stack A/B) | **`bom`** on `*-bom` `main` | `git convoy bom --bom ops/<tenant>-bom` writes `bom/`, `console_bom/`, and `peers_bom/<id>/` |
+| Pin wheels for a **peer** zip/ECS | **`bom`** (same train) | Placement in `deploy_targets.yml`; `bom` regenerates `peers_bom/<peer_id>/` |
 | Package zip + SSM routes | **BOM push** | Push `*-bom` `main` → **Deploy Peers** (or §1e laptop scripts) |
 | First peer **IAM / Lambda / ECS stack** | **No** | Laptop `deploy_peer_cdk.sh` (§1d) — one-time or compute-shape changes |
 | Change `bom-helper` / peer CDK | **Aux**, not feature | `git convoy aux …` — separate from product trains |
 
-**Important:** `git convoy adopt` writes **hub** (`bom/`), **console** (`console_bom/`), and **peer** (`peers_bom/<id>/`) BOMs from one placement map (`hub.python`, `peers.<id>.python`). `deploy_targets.yml` `packages:` is slot metadata; placement lists use **python dist names**.
+**Important:** `git convoy bom` writes **hub** (`bom/`), **console** (`console_bom/`), and **peer** (`peers_bom/<id>/`) BOMs from one placement map (`hub.python`, `peers.<id>.python`). `deploy_targets.yml` `packages:` is slot metadata; placement lists use **python dist names**.
 
 Never put `*-bom` on a feature, train, or hotfix branch. BOM pins land on **`main`**; that push triggers deploy CI.
 
@@ -489,8 +489,8 @@ Never put `*-bom` on a feature, train, or hotfix branch. BOM pins land on **`mai
 Register the BOM in convoy (`gitconvoy.toml` with `role = "bom"`, then `git convoy init`). Adopt targets that checkout:
 
 ```bash
-git convoy adopt --bom ops/<tenant>-bom
-git convoy adopt --production --bom ops/<tenant>-bom   # cycle 4 only
+git convoy bom --bom ops/<tenant>-bom
+git convoy bom --production --bom ops/<tenant>-bom   # cycle 4 only
 ```
 
 ### End-to-end: ship extension code to a peer
@@ -500,7 +500,7 @@ Assume the peer **stack already exists** (§1d). Order matters.
 ```text
 1. Product repos     feature → develop → (train or hotfix) → tag → publish CI → wheels in CodeArtifact
 2. deploy_targets    placement (`hub.python`, `peers.<id>.python`) + `packages:` slots — edit when membership changes
-3. adopt             git convoy adopt --bom ops/<tenant>-bom  →  bom/, console_bom/, peers_bom/<id>/
+3. bom               git convoy bom --bom ops/<tenant>-bom  →  bom/, console_bom/, peers_bom/<id>/
 4. *-bom main        commit + push  →  deploy.yml / deploy_console.yml / deploy_peers.yml
 5. Smoke             sync + one `/start` on that peer (§1f)
 ```
@@ -539,9 +539,9 @@ Confirm extension publish workflows succeeded (tag push → Actions green) befor
 After the train (or hotfix) has published wheels, adopt fills **version pins** from the train into three trees. You do **not** hand-edit `python:` / `npm:` blocks in `bom/`, `console_bom/`, or `peers_bom/` for routine releases.
 
 ```bash
-git convoy adopt --bom ops/<tenant>-bom
+git convoy bom --bom ops/<tenant>-bom
 # cycle 4 production:
-git convoy adopt --production --bom ops/<tenant>-bom
+git convoy bom --production --bom ops/<tenant>-bom
 ```
 
 Adopt also updates `deploy_targets.yml` pointers: `bom:`, `console_bom:`, and each `peers.<id>.peers_bom:` (same semver by default).
@@ -615,8 +615,8 @@ These stay in §1–§4 of this doc:
 | --- | --- |
 | Commit extension work across repos | `git convoy feature adopt` → `feature commit` → `feature prs` |
 | Publish rc wheels for staging train | `git convoy train tag-rc` → verify publish CI |
-| Refresh hub + console + peer pins | `git convoy adopt --bom ops/<tenant>-bom` → push BOM |
+| Refresh hub + console + peer pins | `git convoy bom --bom ops/<tenant>-bom` → push BOM |
 | Ship adopted pins **to a peer** | Push BOM (or **Deploy Peers**); stack must exist (§1d) |
-| Enable production on BOM | `git convoy adopt --production --bom ops/<tenant>-bom` |
+| Enable production on BOM | `git convoy bom --production --bom ops/<tenant>-bom` |
 | Patch production extension quickly | `hotfix publish` → `hotfix adopt --bom ops/<tenant>-bom` → push |
 | Change which dists are on a peer | Edit `peers.<id>.python` in `deploy_targets.yml`, then adopt or `generate_bom.py` |

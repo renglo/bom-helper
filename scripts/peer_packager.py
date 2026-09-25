@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Build and publish a peer's zip Lambda and optional ECS image from a wheelhouse.
 
-Does not use extensions-service ``run.py``. Resource names follow
-``{env}-peer-{peerId}``.
+Resource names follow ``{env}-peer-{peerId}``.
 """
 
 from __future__ import annotations

@@ -40,9 +40,9 @@ Deletes Lambda `{env}-handlers`, its log group, ECS cluster/task family `{env}-h
 
 ## 2. Stack B peel (git)
 
-In `ops/launcher/cdk/stacks/stack_b.py`: stop instantiating `ComputeStack`; stop importing `compute_stack.py` from extensions-service. Remove `compute_type`, `ec2_*`, `github_handlers_repo` from `customer-config.json`. Synth Stack B so CloudFormation no longer owns overflow resources (they should already be gone from step 1).
+In `ops/launcher/cdk/stacks/stack_b.py`: stop instantiating overflow `ComputeStack`. Remove `compute_type`, `ec2_*`, `github_handlers_repo` from `customer-config.json`. Synth Stack B so CloudFormation no longer owns overflow resources (they should already be gone from step 1).
 
-`ops/bootstrap`: stop copying `compute_stack.py` / `github_oidc.py` from extensions-service for API synth. Order is Stack A → Stack B (API) → peer stacks.
+`ops/bootstrap` copies `compute_stack.py` / `github_oidc.py` from `bom-helper` for API synth. Order is Stack A → Stack B (API) → peer stacks.
 
 ## 3. CI / BOM
 
@@ -54,8 +54,8 @@ In `ops/launcher/cdk/stacks/stack_b.py`: stop instantiating `ComputeStack`; stop
 
 After kill-switch soak: remove singleton ARN fallback in `dev/renglo-lib/renglo/schd/external_handlers_config.py` and drop `EXTERNAL_HANDLERS_PEER_ROUTING`.
 
-## 5. Archive extensions-service
+## 5. Laptop builds
 
-See `ops/extensions-service/DEPRECATED.md`. Laptop builds use `peer_packager.py` + peer id only.
+Laptop builds use `peer_packager.py` + peer id only.
 
 **Do not tear down:** Stack A, Stack B API/websocket, peer stacks, bom-helper, `*-bom` `peers:` catalog.
