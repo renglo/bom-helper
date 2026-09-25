@@ -471,7 +471,7 @@ Authority: [`ops/git-convoy/cross-repo-feature-manual.md`](../../git-convoy/cros
 | Pin wheels for a **peer** zip/ECS | **`bom`** (same train) | Placement in `deploy_targets.yml`; `bom` regenerates `peers_bom/<peer_id>/` |
 | Package zip + SSM routes | **BOM push** | Push `*-bom` `main` → **Deploy Peers** (or §1e laptop scripts) |
 | First peer **IAM / Lambda / ECS stack** | **No** | Laptop `deploy_peer_cdk.sh` (§1d) — one-time or compute-shape changes |
-| Change `bom-helper` / peer CDK | **Aux**, not feature | `git convoy aux …` — separate from product trains |
+| Change `bom-helper` / peer CDK | **Ops**, not feature | `git convoy ops …` — separate from product trains |
 
 **Important:** `git convoy bom` writes **hub** (`bom/`), **console** (`console_bom/`), and **peer** (`peers_bom/<id>/`) BOMs from one placement map (`hub.python`, `peers.<id>.python`). `deploy_targets.yml` `packages:` is slot metadata; placement lists use **python dist names**.
 
@@ -484,7 +484,7 @@ Never put `*-bom` on a feature, train, or hotfix branch. BOM pins land on **`mai
 | --- | --- | --- |
 | **Product** | `extensions/<handle>/` | Source code; feature + train/hotfix publish wheels |
 | **BOM** | `ops/<tenant>-bom` | `deploy_targets.yml` (placement + catalog), `bom/`, `console_bom/`, `peers_bom/<peer_id>/` |
-| **Aux** | `bom-helper`, `launcher`, … | Tooling; bump `helper.ref` in `deploy_targets.yml` when aux ships |
+| **Ops** | `bom-helper`, `launcher`, … | Tooling; bump `helper.ref` in `deploy_targets.yml` when aux ships |
 
 Register the BOM in convoy (`gitconvoy.toml` with `role = "bom"`, then `git convoy init`). Adopt targets that checkout:
 
@@ -530,7 +530,7 @@ git convoy train verify         # Full mode; optional --wait
 
 On **production** after stabilization: `git convoy train publish` (cycle 4).
 
-For an urgent **patch** without a train: `hotfix start` → commit → PRs → `hotfix publish` on the extension repos, then `hotfix adopt --bom ops/<tenant>-bom` (writes hub, console, and peer BOMs).
+For an urgent **patch** without a train: `hotfix start` → commit → PRs → `hotfix publish` on the extension repos, then `hotfix bom --bom ops/<tenant>-bom` (writes hub, console, and peer BOMs).
 
 Confirm extension publish workflows succeeded (tag push → Actions green) before adopting registry versions. Do not invent unpublished versions.
 
@@ -618,5 +618,5 @@ These stay in §1–§4 of this doc:
 | Refresh hub + console + peer pins | `git convoy bom --bom ops/<tenant>-bom` → push BOM |
 | Ship adopted pins **to a peer** | Push BOM (or **Deploy Peers**); stack must exist (§1d) |
 | Enable production on BOM | `git convoy bom --production --bom ops/<tenant>-bom` |
-| Patch production extension quickly | `hotfix publish` → `hotfix adopt --bom ops/<tenant>-bom` → push |
+| Patch production extension quickly | `hotfix publish` → `hotfix bom --bom ops/<tenant>-bom` → push |
 | Change which dists are on a peer | Edit `peers.<id>.python` in `deploy_targets.yml`, then adopt or `generate_bom.py` |
