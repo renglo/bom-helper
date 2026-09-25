@@ -86,7 +86,7 @@ Adding a new extension: [Renglo CLI README](../renglo-cli/README.md) (`renglo ex
 
 ## Extension actions IAM
 
-The policy JSON in `extensions/<handle>/installer/infra/` (`cdk_extension.json` → `policy_file`) is the install-time contract. **The same installer also declares buckets and vector indexes.** Catalog placement decides **which stack creates that infra and who is attached**:
+The policy JSON in the published package (`installer/infra/` or `/infra/`, `cdk_extension.json` → `policy_file`) is the install-time contract. Peer CDK downloads the BOM pin and reads that tree; a laptop `extensions/<handle>/installer/infra/` checkout is only an incubation override. **The same installer also declares buckets and vector indexes.** Catalog placement decides **which stack creates that infra and who is attached**:
 
 | Installed on | Catalog | Who creates buckets / indexes / policy | Runtime roles |
 | --- | --- | --- | --- |
@@ -119,8 +119,8 @@ Put each kind of change in exactly one place. If it is not in this table, it is 
 | Handle → Lambda ARN / ECS cluster (runtime)               | SSM `/{env}/bootstrap/peer-routes` (not Lambda env, not platform-vars)                   | `python scripts/write_peer_routes.py …`                                               |
 | Peer Lambda runtime env (tables, `WL_NAME`, secrets)      | SSM `/{env}/bootstrap/deploy-input` + packager                                           | `peer_packager.py publish --env-json`; tables are always `{env}_*`                    |
 | Laptop routing                                            | `dev/renglo-api/env_config.py`                                                           | `EXTERNAL_HANDLERS_PEER_MAP`, `EXTERNAL_HANDLERS_PEER_ROUTING`                        |
-| First-time AWS stack (IAM, Lambda seed, ECS)              | laptop / admin                                                                           | `bash setup-venv.sh`, then `cdk synth` + `cdk deploy` from `bom-helper/cdk` (see §1d) |
-| Extension actions policy (what the handle may do in AWS)  | `extensions/<handle>/installer/infra/` + catalog placement                               | `cdk_extension.json` `policy_file`; attach via Stack B (`hub.python`) or peer CDK (`extensions:`) |
+| First-time AWS stack (IAM, Lambda seed, ECS)              | laptop / admin                                                                           | `renglo peer deploy --peer-id <id>` (or §1d). Synth downloads installer/infra from each BOM pin. |
+| Extension actions policy (what the handle may do in AWS)  | BOM pin for that handle (package `installer/infra` or `/infra`); local `extensions/<handle>/installer/infra/` is incubation only | `cdk_extension.json` `policy_file`; attach via Stack B (`hub.python`) or peer CDK (`extensions:`) |
 | Zip + ECS **image** after the stack exists                | GitHub Actions                                                                           | `.github/workflows/deploy_peers.yml`                                                  |
 | Helper CDK/packager version                               | `deploy_targets.yml`                                                                     | `helper.ref`                                                                          |
 | Tenant AWS account / region                               | `deploy_targets.yml`                                                                     | `tenants.<name>.aws_account`, `aws_region`                                            |
