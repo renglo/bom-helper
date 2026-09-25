@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bom-helper"
-version = "0.1.0"
+version = "0.1.1"
 description = "Shared deploy runtime for every tenant *-bom repository"
 requires-python = ">=3.12"
 dependencies = [
