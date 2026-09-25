@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Create bom-helper/bom-venv: CDK deps + extensions CLI on PATH (like git-convoy).
+# Create bom-helper/bom-venv: CDK deps for peer stacks (like bootstrap).
 #
 # Named bom-venv (not venv) so it is distinguishable from the application venv
 # and obvious which environment a terminal has activated.
@@ -8,7 +8,10 @@
 #   bash setup-venv.sh
 #   bash setup-venv.sh --python python3.12
 #   source bom-venv/bin/activate
-#   extensions help
+#
+# Operator CLI (system/extension install) lives in ops/renglo-cli:
+#   bash ../renglo-cli/setup_venv.sh && source ../renglo-cli/renglo-venv/bin/activate
+#   renglo help
 #
 # Idempotent: safe to re-run. Do not copy bom-venv/ from another machine or OS.
 
@@ -52,7 +55,7 @@ _is_cross_platform_venv() {
   return 1
 }
 
-echo "bom-helper venv (CDK + extensions CLI)"
+echo "bom-helper venv (peer CDK)"
 echo "  python  : $PYTHON"
 echo "  venv    : $VENV_DIR"
 
@@ -73,33 +76,29 @@ fi
 VENV_PYTHON="$(_venv_python)"
 if [[ -z "$VENV_PYTHON" ]]; then
   echo "ERROR: venv python not found under $VENV_DIR" >&2
-  echo "  Try: rm -rf venv && bash setup-venv.sh --python $PYTHON" >&2
+  echo "  Try: rm -rf $VENV_NAME && bash setup-venv.sh --python $PYTHON" >&2
   exit 1
 fi
 
 "$VENV_PYTHON" -m pip install --quiet --upgrade pip
 "$VENV_PYTHON" -m pip install --quiet --upgrade -r "$REQUIREMENTS"
-"$VENV_PYTHON" -m pip install --quiet --isolated --index-url "$PYPI_INDEX" -e ".[dev]"
+"$VENV_PYTHON" -m pip install --quiet --isolated --index-url "$PYPI_INDEX" pytest pyyaml
 
 if ! "$VENV_PYTHON" -c "import aws_cdk" 2>/dev/null; then
   echo "ERROR: aws_cdk not importable after pip install" >&2
   exit 1
 fi
 
-if ! "$VENV_PYTHON" -c "import extensions_cli" 2>/dev/null; then
-  echo "ERROR: extensions_cli not importable after pip install -e" >&2
-  exit 1
-fi
-
-echo "  OK      : $($VENV_PYTHON --version), aws_cdk + extensions CLI"
+echo "  OK      : $($VENV_PYTHON --version), aws_cdk"
 echo
-echo "Activate (then run from any folder in the monorepo):"
+echo "Activate (peer CDK):"
 echo "  source $VENV_NAME/bin/activate"
-echo "  extensions help"
-echo "  extensions tree"
-echo
-echo "Peer CDK (unchanged):"
 echo "  export ENV=<env_name> PEER_ID=<peer-id>"
 echo "  bash scripts/deploy_peer_cdk.sh deploy --peer-id \"\$PEER_ID\" --profile <profile>"
 echo
-echo "Docs: docs/EXTENSIONS.md"
+echo "Operator CLI (install a system or extension) is renglo, not this venv:"
+echo "  bash ../renglo-cli/setup_venv.sh"
+echo "  source ../renglo-cli/renglo-venv/bin/activate"
+echo "  renglo help"
+echo
+echo "Docs: docs/EXTENSIONS.md  docs/PEERS.md"

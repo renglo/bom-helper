@@ -12,10 +12,18 @@ import sys
 from pathlib import Path
 from typing import Any
 
-_SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
-_CDK = Path(__file__).resolve().parent
-for _p in (_CDK, _SCRIPTS):
-    if str(_p) not in sys.path:
+_HERE = Path(__file__).resolve().parent
+_paths = [_HERE, _HERE.parent / "scripts"]
+if _HERE.name == "extensions":
+    _paths.append(_HERE.parent / "lib")
+for _p in (_HERE, *_HERE.parents):
+    _scripts = _p / "bom-helper" / "scripts"
+    _cdk = _p / "bom-helper" / "cdk"
+    if _scripts.is_dir() or _cdk.is_dir():
+        _paths.extend((_scripts, _cdk))
+        break
+for _p in _paths:
+    if _p.is_dir() and str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
 from lambda_env import peer_base_env  # noqa: E402
@@ -134,7 +142,7 @@ def _handlers_managed_policy_document(
     results_bucket_name: str,
     peer_id: str | None = None,
 ) -> iam.PolicyDocument:
-    """Matches extensions-service/scripts/setup_iam_role.sh generated policy."""
+    """IAM for the handlers Lambda to run ECS tasks and write handshake objects."""
     unit = handlers_unit_name(env_name, peer_id)
     return iam.PolicyDocument(
         statements=[
@@ -181,7 +189,7 @@ def _ecs_task_role_policy_document(
     ecr_repo_name: str,
     peer_id: str | None = None,
 ) -> iam.PolicyDocument:
-    """Matches extensions-service/utils/ecs-task-role-policy.template.json."""
+    """IAM for the ECS task role (results bucket, logs, ECR)."""
     unit = handlers_unit_name(env_name, peer_id)
     return iam.PolicyDocument(
         statements=[

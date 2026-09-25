@@ -1,4 +1,4 @@
-.extensions/
+*.egg-info/
 *.pyc
 .venv/
 venv/

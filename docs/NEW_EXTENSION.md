@@ -1,8 +1,8 @@
-# Add a new extension (three golden paths)
+# Add a new extension (three golden paths, by hand)
 
-Prefer the CLI: [EXTENSIONS.md](EXTENSIONS.md). From `ops/bom-helper`, run `bash setup-venv.sh && source bom-venv/bin/activate`, then `extensions install place … --profile <profile>` (profile is stored on the incubation sheet for `publish` and `deploy`). This page is the same paths as files + the four operator actions.
+Prefer the operator CLI: [Renglo CLI README](../renglo-cli/README.md) (`renglo extension install …`). Placement and IAM: [EXTENSIONS.md](EXTENSIONS.md).
 
-This is the operator document for installing extension **xyz** into an existing tenant. It assumes Stack A, Stack B, and (for paths 2–3) at least one peer stack already exist.
+This page is the same three paths as **files + raw CDK**. Use it to see what the CLI is doing, or when you need to deviate. It assumes stack A, stack B, and (for paths 2–3) at least one peer stack already exist.
 
 Example tenant used below:
 
@@ -24,7 +24,7 @@ Do **not** deploy Stack A for a new extension. Stack A already allows hub → `{
 
 ## The four operator actions
 
-For **manual** steps below, set these once per shell. Run every command from `ops/` unless a `cd` says otherwise. If you use the CLI for incubation, pass `--profile` on `install place` instead — later CLI steps read it from the sheet.
+For the **manual** steps below, set these once per shell. Run every command from `ops/` unless a `cd` says otherwise. Operators using `renglo` should ignore this section.
 
 ```bash
 export ENV=arbitium0813

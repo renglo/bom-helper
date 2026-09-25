@@ -13,7 +13,6 @@ Layout and pipeline membership come from conventions (overrideable per repo):
   renglo/renglo-api            -> dev/renglo-api            (backend)
   renglo/renglo-lib            -> dev/renglo-lib            (backend; handlers)
   renglo/console               -> console                   (console)
-  renglo/extensions-service    -> dev/extensions-service    (handlers)
   org/wl | org/<tenant>-wl     -> <repo shortname>          (console)
   any other org/name           -> extensions/<name>
 
@@ -45,7 +44,6 @@ CORE_REPOS: dict[str, tuple[str, frozenset[str]]] = {
     # Backend may still clone when unpinned; handlers always consume the python pin.
     "renglo/renglo-lib": ("dev/renglo-lib", frozenset({"backend"})),
     "renglo/console": ("console", frozenset({"console"})),
-    "renglo/extensions-service": ("dev/extensions-service", frozenset({"handlers"})),
 }
 
 # Console host app. A pin unpacks this tarball to console/; it is not npm-installed

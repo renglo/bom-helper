@@ -142,10 +142,6 @@ def main() -> int:
         if not has_console:
             print("Console checkout missing: expected a console/ directory or @renglo/console pin.", file=sys.stderr)
             return 1
-    if args.pipeline == "handlers" and not (dest_root / "dev" / "extensions-service").is_dir():
-        print("Handlers checkout missing: expected dev/extensions-service.", file=sys.stderr)
-        return 1
-
     vite_extensions = scan_vite_extensions(dest_root, specs)
     vite_names = list(dict.fromkeys([*vite_extensions, *npm_extension_handles(data)]))
     if args.pipeline == "console" and not vite_names:

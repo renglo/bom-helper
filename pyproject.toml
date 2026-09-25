@@ -3,24 +3,19 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "extensions-cli"
+name = "bom-helper"
 version = "0.1.0"
-description = "Tenant extension catalog inspect and one-time incubation install"
-readme = "docs/EXTENSIONS.md"
+description = "Shared deploy runtime for every tenant *-bom repository"
 requires-python = ">=3.12"
 dependencies = [
     "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0.0", "build>=1.0.0"]
+dev = ["pytest>=7.0.0"]
 
-[project.scripts]
-extensions = "extensions_cli.cli:main"
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["extensions_cli*"]
+[tool.setuptools]
+packages = []
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -19,8 +19,8 @@ AWS overflow resources (when --execute):
   * IAM overflow roles/policy (not ``{env}-peer-{peerId}-*``)
 
 SSM: strips singleton overflow keys from platform-vars after peers are the
-only route. Stack B ComputeStack peel and extensions-service archive are
-documented in docs/OVERFLOW_TEARDOWN.md — they are git changes, not this script.
+only route. Stack B ComputeStack peel is documented in
+docs/OVERFLOW_TEARDOWN.md — that is a git change, not this script.
 """
 
 from __future__ import annotations
@@ -270,7 +270,7 @@ def main() -> int:
     _delete_ecs(session, names, execute)
     _delete_ecr_s3_iam(session, names, args.account, execute)
     _strip_ssm_overflow(session, args.env_name, execute)
-    print("Done. Peel Stack B ComputeStack and archive extensions-service per docs/OVERFLOW_TEARDOWN.md")
+    print("Done. Peel Stack B ComputeStack per docs/OVERFLOW_TEARDOWN.md")
     return 0
 
 

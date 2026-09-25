@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a handlers wheelhouse + thin assets tree for extensions-service builds.
+"""Build a handlers wheelhouse + thin assets tree for peer / overflow builds.
 
 Produces::
 

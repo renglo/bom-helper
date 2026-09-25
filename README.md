@@ -6,7 +6,8 @@ Tenant BOM repos keep **pins + placement** (`bom/` hub, `console_bom/`, `peers_b
 This repo owns the scripts, Dockerfile, **peer CDK/packager**, and the GitHub Action that wires them into CI.
 
 Peer vocabulary, add-peer, grouping, and MCP: [docs/PEERS.md](docs/PEERS.md).
-Extensions CLI: [docs/EXTENSIONS.md](docs/EXTENSIONS.md) (`bash setup-venv.sh && source bom-venv/bin/activate && extensions help`).
+Operator CLI: [../renglo-cli/README.md](../renglo-cli/README.md) (`bash ../renglo-cli/setup_venv.sh && source ../renglo-cli/renglo-venv/bin/activate && renglo help`).
+Extension install: [../renglo-cli/README.md](../renglo-cli/README.md). Placement and IAM: [docs/EXTENSIONS.md](docs/EXTENSIONS.md).
 Overflow teardown after smoke: [docs/OVERFLOW_TEARDOWN.md](docs/OVERFLOW_TEARDOWN.md).
 
 ## What stays where
@@ -16,7 +17,7 @@ Overflow teardown after smoke: [docs/OVERFLOW_TEARDOWN.md](docs/OVERFLOW_TEARDOW
 | **`*-bom`** | `bom/` (hub), `console_bom/`, `peers_bom/<peerId>/`, `handlers_bom/` (overflow), `deploy_targets.yml` |
 | **`bom-helper`** | `scripts/` (`generate_bom.py`, `bom_layout.py`), `cdk/`, `tests/`, `Dockerfile` |
 
-`git convoy adopt --bom ops/<system>-bom` fills pins from the train and writes **three BOM trees** (hub, console, peers) from `deploy_targets.yml` placement. Regenerate manually with `python scripts/generate_bom.py ../<tenant>-bom --version X.Y.Z`.
+`git convoy bom --bom ops/<system>-bom` fills pins from the train and writes **three BOM trees** (hub, console, peers) from `deploy_targets.yml` placement. Regenerate manually with `python scripts/generate_bom.py ../<tenant>-bom --version X.Y.Z`.
 
 ## Pin from a tenant BOM
 

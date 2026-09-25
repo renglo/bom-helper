@@ -56,8 +56,8 @@ After this peel, synth Stack B so CloudFormation no longer owns overflow resourc
 
 After kill-switch soak: remove singleton ARN fallback in `dev/renglo-lib/renglo/schd/external_handlers_config.py` and drop `EXTERNAL_HANDLERS_PEER_ROUTING`.
 
-## 5. Archive extensions-service
+## 5. Laptop builds
 
-See `ops/extensions-service/DEPRECATED.md`. Laptop builds use `peer_packager.py` + peer id only.
+Laptop builds use `peer_packager.py` + peer id only.
 
 **Do not tear down:** Stack A, Stack B API/websocket, peer stacks, bom-helper, `*-bom` `peers:` catalog.

@@ -334,7 +334,6 @@ class BomManifestV2Tests(unittest.TestCase):
                 },
                 "repos": {
                     "renglo/renglo-lib": {"commit": "abc"},
-                    "renglo/extensions-service": {"commit": "def"},
                 },
             },
         )
@@ -345,7 +344,7 @@ class BomManifestV2Tests(unittest.TestCase):
         self.assertIn("acme-lab", install)
         specs = resolve_specs(path, data)
         handlers = checkout_specs(specs, "handlers", data)
-        self.assertEqual([s.key for s in handlers], ["renglo/extensions-service"])
+        self.assertEqual([s.key for s in handlers], [])
         skipped = repos_skipped_by_pins(data, "handlers")
         self.assertIn("renglo/renglo-lib", skipped)
         self.assertIn("renglo/gro", skipped)  # python.renglo-gro pin
