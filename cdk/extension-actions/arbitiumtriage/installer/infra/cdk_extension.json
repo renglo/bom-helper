@@ -1,0 +1,34 @@
+{
+  "policy_file": "arbitiumtriage_actions_tt_policy.json",
+  "policy_name": "{env}-arbitiumtriage-actions",
+  "policy_description": "Arbitiumtriage domain handlers (indexes declared on platform vector bucket)",
+  "attach_policy_to_roles": [
+    "{env}_tt_role"
+  ],
+  "s3_vector_indexes": [
+    {
+      "id": "ThreatEventsIndex",
+      "index_name": "threat-events",
+      "dimension": 1024,
+      "output_var": "S3_VECTORS_INDEX_THREAT_EVENTS"
+    },
+    {
+      "id": "CatalogIndex",
+      "index_name": "catalog",
+      "dimension": 1024,
+      "output_var": "S3_VECTORS_INDEX_CATALOG"
+    },
+    {
+      "id": "CampaignsIndex",
+      "index_name": "campaigns",
+      "dimension": 1024,
+      "output_var": "S3_VECTORS_INDEX_CAMPAIGNS"
+    }
+  ],
+  "runtime_defaults": {
+    "S3_VECTORS_INDEX_THREAT_EVENTS": "threat-events",
+    "S3_VECTORS_INDEX_CATALOG": "catalog",
+    "S3_VECTORS_INDEX_CAMPAIGNS": "campaigns",
+    "EXTERNAL_HANDLERS": "arbitiumtriage"
+  }
+}

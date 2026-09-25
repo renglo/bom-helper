@@ -36,12 +36,11 @@ from targets import ctx_get as _ctx  # noqa: E402
 
 def _tenant_cfg(data: dict, tenant_key: str, env_name: str) -> dict:
     tenants = data.get("tenants") or {}
-    if tenant_key and tenant_key in tenants and isinstance(tenants[tenant_key], dict):
-        return tenants[tenant_key]
-    for cfg in tenants.values():
-        if isinstance(cfg, dict) and str(cfg.get("id", "")).strip() == env_name:
-            return cfg
-    raise SystemExit(f"No tenant with id={env_name!r} (or key={tenant_key!r}) in deploy_targets.yml")
+    key = (tenant_key or env_name).strip()
+    cfg = tenants.get(key) if isinstance(tenants, dict) else None
+    if isinstance(cfg, dict):
+        return cfg
+    raise SystemExit(f"No tenant {key!r} in deploy_targets.yml")
 
 
 class HandlersPeerStack(Stack):

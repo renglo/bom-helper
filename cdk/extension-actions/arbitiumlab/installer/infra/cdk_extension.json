@@ -1,0 +1,36 @@
+{
+  "policy_file": "actions_tt_policy.json",
+  "policy_name": "{env}_actions_tt_policy",
+  "policy_description": "Reglo Deployment — extension actions policy",
+  "s3_buckets": [
+    {
+      "id": "ThreatEvents",
+      "name_prefix": "{env}-threat-events",
+      "output_var": "ARBITIUM_THREAT_EVENTS_BUCKET"
+    }
+  ],
+  "s3_vector_indexes": [
+    {
+      "id": "SecurityEventsIndex",
+      "index_name": "security-events",
+      "dimension": 1024,
+      "output_var": "S3_VECTORS_INDEX_SECURITY_EVENTS"
+    }
+  ],
+  "runtime_defaults": {
+    "S3_VECTORS_INDEX_SECURITY_EVENTS": "security-events"
+  },
+  "attach_policy_to_roles": [
+    "{env}_tt_role"
+  ],
+  "state": {
+    "runtime_stack_outputs": [
+      "ARBITIUM_THREAT_EVENTS_BUCKET",
+      "EXTERNAL_HANDLERS"
+    ],
+    "inventory_stack_outputs": [
+      "ActionsPolicyArn",
+      "ActionsPolicyName"
+    ]
+  }
+}

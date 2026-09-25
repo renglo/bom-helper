@@ -1,0 +1,208 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CoreIdentityAndOrg",
+      "Effect": "Allow",
+      "Action": [
+        "sts:GetCallerIdentity",
+        "account:GetContactInformation",
+        "organizations:Describe*",
+        "organizations:List*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "EC2Discovery",
+      "Effect": "Allow",
+      "Action": ["ec2:Describe*"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "NetworkingDiscovery",
+      "Effect": "Allow",
+      "Action": [
+        "elasticloadbalancing:Describe*",
+        "cloudfront:List*",
+        "cloudfront:Get*",
+        "route53:List*",
+        "route53:Get*",
+        "route53resolver:List*",
+        "route53resolver:Get*",
+        "directconnect:Describe*",
+        "networkfirewall:List*",
+        "networkfirewall:Describe*",
+        "globalaccelerator:List*",
+        "globalaccelerator:Describe*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ApiGatewayDiscovery",
+      "Effect": "Allow",
+      "Action": ["apigateway:GET"],
+      "Resource": [
+        "arn:aws:apigateway:*::/restapis",
+        "arn:aws:apigateway:*::/restapis/*",
+        "arn:aws:apigateway:*::/apis",
+        "arn:aws:apigateway:*::/apis/*"
+      ]
+    },
+    {
+      "Sid": "ComputeDiscovery",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:List*",
+        "lambda:Get*",
+        "ecs:List*",
+        "ecs:Describe*",
+        "eks:List*",
+        "eks:Describe*",
+        "autoscaling:Describe*",
+        "elasticmapreduce:List*",
+        "elasticmapreduce:Describe*",
+        "batch:Describe*",
+        "batch:List*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "S3Discovery",
+      "Effect": "Allow",
+      "Action": ["s3:ListAllMyBuckets"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "S3BucketDiscovery",
+      "Effect": "Allow",
+      "Action": ["s3:List*", "s3:GetBucket*"],
+      "Resource": ["arn:aws:s3:::*", "arn:aws:s3:::*/*"]
+    },
+    {
+      "Sid": "BlockStorageDiscovery",
+      "Effect": "Allow",
+      "Action": [
+        "elasticfilesystem:Describe*",
+        "elasticfilesystem:List*",
+        "elasticache:Describe*",
+        "elasticache:List*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DatabaseDiscovery",
+      "Effect": "Allow",
+      "Action": [
+        "rds:Describe*",
+        "rds:List*",
+        "dynamodb:Describe*",
+        "dynamodb:List*",
+        "redshift:Describe*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "IdentityAndAccessDiscovery",
+      "Effect": "Allow",
+      "Action": [
+        "iam:List*",
+        "iam:Get*",
+        "cognito-idp:List*",
+        "cognito-idp:Describe*",
+        "cognito-identity:List*",
+        "cognito-identity:Describe*",
+        "sso:List*",
+        "sso:Describe*",
+        "sso:Get*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SecretsAndKeysDiscovery",
+      "Effect": "Allow",
+      "Action": [
+        "kms:List*",
+        "kms:Describe*",
+        "kms:Get*",
+        "secretsmanager:List*",
+        "secretsmanager:Describe*",
+        "ssm:Describe*",
+        "ssm:List*",
+        "ssm:GetParameter"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PolicyAndWafDiscovery",
+      "Effect": "Allow",
+      "Action": [
+        "wafv2:List*",
+        "wafv2:Get*",
+        "wafv2:Describe*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PlatformDiscovery",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:Describe*",
+        "cloudformation:List*",
+        "cloudformation:Get*",
+        "servicecatalog:Search*",
+        "servicecatalog:Describe*",
+        "servicecatalog:List*",
+        "codepipeline:List*",
+        "codepipeline:Get*",
+        "codebuild:List*",
+        "codebuild:BatchGet*",
+        "codedeploy:List*",
+        "codedeploy:Get*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ObservabilityDiscovery",
+      "Effect": "Allow",
+      "Action": [
+        "logs:Describe*",
+        "logs:List*",
+        "cloudwatch:Describe*",
+        "cloudwatch:List*",
+        "cloudtrail:Describe*",
+        "cloudtrail:List*",
+        "cloudtrail:Get*",
+        "xray:Get*",
+        "xray:List*",
+        "xray:BatchGet*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "IntegrationDiscovery",
+      "Effect": "Allow",
+      "Action": [
+        "sns:List*",
+        "sns:Get*",
+        "sqs:List*",
+        "sqs:Get*",
+        "events:List*",
+        "events:Describe*",
+        "states:List*",
+        "states:Describe*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ResourceSearchAndTags",
+      "Effect": "Allow",
+      "Action": [
+        "resourcegroupstaggingapi:Get*",
+        "resource-explorer-2:Search",
+        "resource-explorer-2:List*",
+        "resource-explorer-2:Get*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

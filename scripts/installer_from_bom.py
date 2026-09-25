@@ -237,15 +237,22 @@ def download_pin(dist: str, version: str, dest_dir: Path) -> Path:
 
 
 def configure_pip_from_bom(bom_root: Path) -> None:
-    """Login pip to CodeArtifact when ``deploy_targets.yml`` lists registries."""
+    """Login pip to CodeArtifact using resolved ``deploy_targets.yml`` registries."""
     if os.environ.get("INSTALLER_FROM_BOM_SKIP_LOGIN", "").strip() in {"1", "true", "yes"}:
         return
     data = _load_targets(bom_root)
-    registries = data.get("registries") or []
-    if not isinstance(registries, list) or not registries:
-        return
     from configure_codeartifact import configure_pip  # noqa: PLC0415
+    from registry_targets import resolve_registries  # noqa: PLC0415
 
+    domain_override = os.environ.get("CODEARTIFACT_DOMAIN", "").strip()
+    owner_override = os.environ.get("CODEARTIFACT_DOMAIN_OWNER", "").strip()
+    registries = resolve_registries(
+        data,
+        domain_override=domain_override,
+        owner_override=owner_override,
+    )
+    if not registries:
+        return
     configure_pip(registries)
 
 

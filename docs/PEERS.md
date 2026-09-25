@@ -15,7 +15,7 @@ Example values use angle brackets — substitute your own; they are not literal 
 | --------------- | --------------------------------------------------------------- |
 | `<env_id>`      | AWS env prefix (`customer-config.json` `env_name`; shell `ENV`) |
 | `<aws_profile>` | AWS CLI profile                                                 |
-| `<tenant>`      | Key under `tenants:` in `deploy_targets.yml`                    |
+| `<tenant>`      | Key under `tenants:` in `deploy_targets.yml` (same string as `<env_id>`) |
 | `<peer_id>`     | Key under `peers:` in `deploy_targets.yml`                      |
 | `<handle>`      | Extension invoke handle (`peers.*.extensions`)                  |
 | `<dist>`        | Python wheel name in a pin file (`python:` map)                 |

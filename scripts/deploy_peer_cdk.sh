@@ -88,7 +88,10 @@ else
 fi
 mkdir -p "$OUTPUT_DIR"
 
-CDK_ARGS=(--app "$CDK_APP" --output "$OUTPUT_DIR" "${CONTEXT[@]}")
+CDK_ARGS=(--app "$CDK_APP" --output "$OUTPUT_DIR")
+if ((${#CONTEXT[@]})); then
+  CDK_ARGS+=("${CONTEXT[@]}")
+fi
 [[ -n "$PROFILE" ]] && CDK_ARGS+=(--profile "$PROFILE")
 
 STACK=""
@@ -101,9 +104,11 @@ fi
 # A later CDK deploy resets Handler even when it leaves the zip in place —
 # restore the published entry point when CodeSize shows a real package.
 _aws() {
-  local extra=()
-  [[ -n "$PROFILE" ]] && extra+=(--profile "$PROFILE")
-  aws --region "${AWS_REGION:-us-east-1}" "${extra[@]}" "$@"
+  if [[ -n "$PROFILE" ]]; then
+    aws --region "${AWS_REGION:-us-east-1}" --profile "$PROFILE" "$@"
+  else
+    aws --region "${AWS_REGION:-us-east-1}" "$@"
+  fi
 }
 
 _pin_published_handler() {

@@ -81,23 +81,25 @@ def resolve_peer_deploy_context(
     data = load_targets_yaml(targets_path)
     tenants = data.get("tenants") or {}
 
+    if tenant_key and env_name and tenant_key != env_name:
+        raise SystemExit(
+            f"tenant {tenant_key!r} and env_name {env_name!r} differ. "
+            "The tenants: key is the AWS prefix; they must be the same string."
+        )
     if not tenant_key and env_name:
         tenant_key = tenant_key_for_env(tenants, env_name)
     if not env_name and tenant_key:
-        cfg = tenants.get(tenant_key) or {}
-        env_name = str(cfg.get("id", "")).strip()
-    if not tenant_key and len(tenants) == 1:
-        tenant_key = next(iter(tenants.keys()))
+        env_name = tenant_key
 
     if not env_name:
         raise SystemExit(
             "Could not resolve env_name. Set launcher/cdk/customer-config.json env_name "
             "or PEER_ENV_NAME / --context env_name=…."
         )
-    if not tenant_key:
+    if not tenant_key or not isinstance(tenants, dict) or tenant_key not in tenants:
         raise SystemExit(
-            "Could not resolve tenant key. launcher env_name must match tenants.<key>.id "
-            "in deploy_targets.yml or pass PEER_TENANT / --context tenant=…."
+            f"No tenant {env_name!r} in deploy_targets.yml. "
+            "Add a tenants: key equal to env_name, or pass PEER_TENANT / --context tenant=…."
         )
     if not bom_repo:
         raise SystemExit(

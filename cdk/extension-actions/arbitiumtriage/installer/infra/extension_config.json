@@ -1,0 +1,7 @@
+{
+  "EXTERNAL_HANDLERS": "arbitiumtriage",
+  "S3_VECTORS_INDEX_THREAT_EVENTS": "threat-events",
+  "S3_VECTORS_INDEX_CATALOG": "catalog",
+  "S3_VECTORS_INDEX_CAMPAIGNS": "campaigns",
+  "SECRETS": {}
+}

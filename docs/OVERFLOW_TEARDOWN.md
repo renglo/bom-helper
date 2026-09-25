@@ -4,7 +4,7 @@ Gate: every handle in `EXTERNAL_HANDLERS` has a peer map entry; light + one heav
 
 Then tear down **all** of the following. Leaving any of it is a failed migration.
 
-Placeholders: `<env_id>` and `<aws_account>` come from `deploy_targets.yml` (`tenants.*.id`, `tenants.*.aws_account`). `<aws_profile>` is your **named** tenant CLI profile — same as [PEERS.md](PEERS.md). Do **not** use the default profile.
+Placeholders: `<env_id>` and `<aws_account>` come from `deploy_targets.yml` (the `tenants:` key, `tenants.*.aws_account`). `<aws_profile>` is your **named** tenant CLI profile — same as [PEERS.md](PEERS.md). Do **not** use the default profile.
 
 ## 1. AWS overflow node
 

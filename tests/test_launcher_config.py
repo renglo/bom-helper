@@ -107,11 +107,11 @@ class PeerDeployContextTests(unittest.TestCase):
             (bom / "deploy_targets.yml").write_text(
                 "peers:\n  analytics:\n    compute: lambda_only\n"
                 "    extensions: [ledger]\n    peers_bom: 0.0.1\n"
-                "tenants:\n  acme:\n    id: acme0813\n",
+                "tenants:\n  acme0813:\n    aws_account: \"111122223333\"\n",
                 encoding="utf-8",
             )
             ctx = resolve_peer_deploy_context(helper_root=helper)
-            self.assertEqual(ctx["tenant"], "acme")
+            self.assertEqual(ctx["tenant"], "acme0813")
             self.assertEqual(ctx["env_name"], "acme0813")
             self.assertEqual(ctx["bom_repo"], "Org/acme-bom")
             self.assertTrue(ctx["targets_path"].endswith("acme-bom/deploy_targets.yml"))
